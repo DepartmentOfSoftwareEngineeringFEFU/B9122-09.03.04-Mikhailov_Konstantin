@@ -13,8 +13,8 @@ class CianFlat(BaseModel):
     floor: Optional[int] = None
     floors_count: Optional[int] = None
 
-    region: str = ""
-    city: str = ""
+    # region: str = ""
+    # city: str = ""
     district: str = ""
     microdistrict: str = ""
     street: str = ""
@@ -27,18 +27,20 @@ class CianFlat(BaseModel):
     kitchen_meters: Optional[float] = None
     ceiling_height: Optional[float] = None
     object_type: str = ""          # новостройка / Вторичка
-    layout_type: str = ""          # смежная / изолированная / смежно-изолированная
+    layout_type: str = ""          # планировка: смежная / изолированная / смежно-изолированная
     bathroom_type: str = ""        # раздельный / совмещённый
     bathroom_count: Optional[int] = None
     window_view: str = ""          # во двор / на улицу
-    finish_type: str = ""          # без ремонта / косметический / евро / дизайнерский / предчистовая / чистовая
+    finish_type: str = ""          # без ремонта / косметический / евро / дизайнерский / предчистова ...
     balcony_count: Optional[int] = None
     loggia_count: Optional[int] = None
     has_furniture: Optional[bool] = None
 
     year_of_construction: Optional[int] = None
-    house_material_type: str = ""  # кирпичный / монолитный / панельный / блочный / деревянный / монолитно-кирпичный / сталинский
+    house_material_type: str = ""  # кирпичный / монолитный / панельный / блочный / деревянный / мон ...
     floor_type: str = ""           # тип перекрытий
+
+
     elevator_passenger: Optional[int] = None
     elevator_cargo: Optional[int] = None
     entrances_count: Optional[int] = None

@@ -57,6 +57,8 @@ def _parse_about_flat(soup: BeautifulSoup, details: dict) -> None:
     items = _extract_info_items(flat_group)
 
     FLAT_MAPPING = {
+
+
         "тип жилья": ("object_type", _str),
         "общая площадь": ("total_meters", _parse_area),
         "жилая площадь": ("living_meters", _parse_area),
@@ -117,6 +119,8 @@ def _parse_about_building(
         "о подъезде": ("_entrance_info_raw", _str),
         "о\xa0подъезде": ("_entrance_info_raw", _str),
         "парковка": ("parking_type", _str),
+
+
         "отопление": ("heating_type", _str),
         "аварийность": ("is_emergency", _parse_emergency),
     }
@@ -177,6 +181,8 @@ def _parse_about_jk(
                 if "house_material_type" not in details:
                     details["house_material_type"] = value
             elif "парковка" in name:
+
+
                 if "parking_type" not in details:
                     details["parking_type"] = value
             elif "отделка" in name:
@@ -237,6 +243,8 @@ def _extract_info_items(container: Tag) -> list[tuple[str, str]]:
     """
     items = []
     info_divs = container.select(
+
+
         '[data-name="OfferSummaryInfoItem"]'
     )
 
@@ -297,6 +305,8 @@ def _parse_furniture(value: str) -> Optional[bool]:
     if "с мебелью" in lower or "есть" in lower:
         return True
     if "без мебели" in lower or "нет" in lower:
+
+
         return False
     return None
 
