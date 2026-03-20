@@ -2,6 +2,9 @@
 __pycache__/
 *.py[codz]
 *$py.class
+debug_html
+datasets
+debug
 
 # C extensions
 *.so
