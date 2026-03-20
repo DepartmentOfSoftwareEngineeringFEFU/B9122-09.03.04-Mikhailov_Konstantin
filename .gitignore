@@ -5,6 +5,7 @@ __pycache__/
 debug_html
 datasets
 debug
+real-esate-forecasting_python_docs.pdf
 
 # C extensions
 *.so
