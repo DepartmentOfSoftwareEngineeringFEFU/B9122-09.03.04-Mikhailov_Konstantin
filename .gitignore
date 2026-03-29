@@ -218,3 +218,5 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+forecasting-service/src/domclick_detail_test.html
+forecasting-service/src/domclick_listing_test.html
