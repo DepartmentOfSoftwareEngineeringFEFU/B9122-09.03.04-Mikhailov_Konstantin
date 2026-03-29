@@ -7,6 +7,12 @@ from typing import Optional
 import pandas as pd
 from loguru import logger
 
+from forecasting_service.config import (
+    DATASETS_DIR,
+    DETAIL_FIELDS,
+    COVERAGE_FIELDS,
+)
+
 
 class DetailStatus(str, Enum):
     PENDING = "pending"
@@ -16,22 +22,28 @@ class DetailStatus(str, Enum):
     BLOCKED = "blocked"
 
 
-DB_DIR = Path(__file__).resolve().parent.parent / "datasets"
+
+_LISTING_NUMERIC_FIELDS = (
+    "price", "total_meters", "rooms_count", "floor", "floors_count",
+)
+
+_LISTING_TEXT_FIELDS = (
+    "district", "microdistrict", "street", "house_number",
+    "residential_complex", "underground", "address_raw", "title_raw",
+)
 
 
 class FlatStorage:
-
     def __init__(self, db_name: str = "flats.db"):
-        DB_DIR.mkdir(parents=True, exist_ok=True)
-        self.db_path = DB_DIR / db_name
+        DATASETS_DIR.mkdir(parents=True, exist_ok=True)
+        self.db_path = DATASETS_DIR / db_name
         self._conn: Optional[sqlite3.Connection] = None
         self._init_db()
 
+
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
-            self._conn = sqlite3.connect(
-                str(self.db_path), timeout=30,
-            )
+            self._conn = sqlite3.connect(str(self.db_path), timeout=30)
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
@@ -53,8 +65,6 @@ class FlatStorage:
                 floors_count INTEGER,
 
                 district TEXT DEFAULT '',
-
-
                 microdistrict TEXT DEFAULT '',
                 street TEXT DEFAULT '',
                 house_number TEXT DEFAULT '',
@@ -115,108 +125,99 @@ class FlatStorage:
             CREATE INDEX IF NOT EXISTS idx_district
                 ON flats(district);
         """)
-
-
         conn.commit()
-        logger.info(f" БД инициализирована: {self.db_path}")
+        logger.info(f"  БД инициализирована: {self.db_path}")
 
-    def upsert_from_listing(self, flat_dict: dict) -> bool:
+
+    def upsert_from_listing(
+        self,
+        flat_dict: dict,
+        *,
+        _commit: bool = True,
+    ) -> bool:
         conn = self._get_conn()
         url = flat_dict.get("url", "")
         if not url:
             return False
 
         existing = conn.execute(
-            "SELECT id, detail_status FROM flats WHERE url = ?",
-            (url,),
+            "SELECT id FROM flats WHERE url = ?", (url,)
         ).fetchone()
 
         if existing:
-            conn.execute("""
-                UPDATE flats SET
-                    price = COALESCE(?, price),
-                    total_meters = COALESCE(?, total_meters),
-                    rooms_count = COALESCE(?, rooms_count),
-                    floor = COALESCE(?, floor),
-                    floors_count = COALESCE(?, floors_count),
-                    district = CASE WHEN ? != '' THEN ? ELSE district END,
-                    microdistrict = CASE WHEN ? != '' THEN ? ELSE microdistrict END,
-                    street = CASE WHEN ? != '' THEN ? ELSE street END,
-                    house_number = CASE WHEN ? != '' THEN ? ELSE house_number END,
-                    residential_complex = CASE WHEN ? != '' THEN ? ELSE residential_complex END,
-                    underground = CASE WHEN ? != '' THEN ? ELSE underground END,
-                    address_raw = CASE WHEN ? != '' THEN ? ELSE address_raw END,
-                    title_raw = CASE WHEN ? != '' THEN ? ELSE title_raw END,
-                    updated_at = datetime('now')
-                WHERE url = ?
-            """, (
-                flat_dict.get("price"),
-                flat_dict.get("total_meters"),
-                flat_dict.get("rooms_count"),
-                flat_dict.get("floor"),
-                flat_dict.get("floors_count"),
-                flat_dict.get("district", ""), flat_dict.get("district", ""),
-                flat_dict.get("microdistrict", ""), flat_dict.get("microdistrict", ""),
-                flat_dict.get("street", ""), flat_dict.get("street", ""),
-                flat_dict.get("house_number", ""), flat_dict.get("house_number", ""),
-                flat_dict.get("residential_complex", ""), flat_dict.get("residential_complex", ""),
-                flat_dict.get("underground", ""), flat_dict.get("underground", ""),
-                flat_dict.get("address_raw", ""), flat_dict.get("address_raw", ""),
-                flat_dict.get("title_raw", ""), flat_dict.get("title_raw", ""),
-                url,
-            ))
-            conn.commit()
+            self._update_from_listing(conn, flat_dict, url)
+            if _commit:
+                conn.commit()
             return False
 
-        conn.execute("""
-            INSERT INTO flats (
-                url, cian_id, price,
-                total_meters, rooms_count, floor, floors_count,
-                district, microdistrict,
-                street, house_number, underground,
-                residential_complex, address_raw, title_raw,
-                detail_status
-            ) VALUES (
-
-
-                ?, ?, ?,
-                ?, ?, ?, ?,
-                ?, ?,
-                ?, ?, ?,
-                ?, ?, ?,
-                'pending'
-            )
-        """, (
-            url,
-            flat_dict.get("cian_id"),
-            flat_dict.get("price"),
-            flat_dict.get("total_meters"),
-            flat_dict.get("rooms_count"),
-            flat_dict.get("floor"),
-            flat_dict.get("floors_count"),
-            flat_dict.get("district", ""),
-            flat_dict.get("microdistrict", ""),
-            flat_dict.get("street", ""),
-            flat_dict.get("house_number", ""),
-            flat_dict.get("underground", ""),
-            flat_dict.get("residential_complex", ""),
-            flat_dict.get("address_raw", ""),
-            flat_dict.get("title_raw", ""),
-        ))
-        conn.commit()
+        self._insert_from_listing(conn, flat_dict, url)
+        if _commit:
+            conn.commit()
         return True
 
+    def _update_from_listing(
+        self,
+        conn: sqlite3.Connection,
+        flat_dict: dict,
+        url: str,
+    ) -> None:
+        set_parts = []
+        values = []
+
+        for field in _LISTING_NUMERIC_FIELDS:
+            set_parts.append(f"{field} = COALESCE(?, {field})")
+            values.append(flat_dict.get(field))
+
+        for field in _LISTING_TEXT_FIELDS:
+            set_parts.append(f"{field} = CASE WHEN ? != '' THEN ? ELSE {field} END")
+            val = flat_dict.get(field, "")
+            values.extend([val, val])
+
+        set_parts.append("updated_at = datetime('now')")
+        values.append(url)
+
+        sql = f"UPDATE flats SET {', '.join(set_parts)} WHERE url = ?"
+        conn.execute(sql, values)
+
+    def _insert_from_listing(
+        self,
+        conn: sqlite3.Connection,
+        flat_dict: dict,
+        url: str,
+    ) -> None:
+        all_fields = ("url", "cian_id") + _LISTING_NUMERIC_FIELDS + _LISTING_TEXT_FIELDS
+        field_names = ", ".join(all_fields) + ", detail_status"
+        placeholders = ", ".join(["?"] * len(all_fields)) + ", 'pending'"
+
+        values = [url, flat_dict.get("cian_id")]
+        for field in _LISTING_NUMERIC_FIELDS:
+            values.append(flat_dict.get(field))
+        for field in _LISTING_TEXT_FIELDS:
+            values.append(flat_dict.get(field, ""))
+
+        sql = f"INSERT INTO flats ({field_names}) VALUES ({placeholders})"
+        conn.execute(sql, values)
+
     def bulk_upsert_from_listing(
-        self, flats: list[dict]
+        self,
+        flats: list[dict],
     ) -> tuple[int, int]:
+        conn = self._get_conn()
         new_count = 0
         updated_count = 0
-        for flat in flats:
-            is_new = self.upsert_from_listing(flat)
-            if is_new:
-                new_count += 1
-            else:
-                updated_count += 1
+
+        try:
+            for flat in flats:
+                is_new = self.upsert_from_listing(flat, _commit=False)
+                if is_new:
+                    new_count += 1
+                else:
+                    updated_count += 1
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
         return new_count, updated_count
 
     def get_next_for_detail(
@@ -230,7 +231,7 @@ class FlatStorage:
         ).isoformat()
 
         row = conn.execute("""
-            SELECT * FROM flats
+            SELECT id, url FROM flats
             WHERE (
                 detail_status = 'pending'
                 OR (
@@ -239,8 +240,6 @@ class FlatStorage:
                     AND (last_attempt_at IS NULL OR last_attempt_at < ?)
                 )
             )
-
-
             AND url != ''
             ORDER BY
                 CASE detail_status
@@ -251,40 +250,26 @@ class FlatStorage:
             LIMIT 1
         """, (max_attempts, cooldown_time)).fetchone()
 
-        if row:
-            conn.execute("""
-                UPDATE flats
-                SET detail_status = 'in_progress',
-                    last_attempt_at = datetime('now')
-                WHERE id = ?
-            """, (row["id"],))
-            conn.commit()
-            return dict(row)
+        if not row:
+            return None
 
-        return None
+        conn.execute("""
+            UPDATE flats
+            SET detail_status = 'in_progress',
+                last_attempt_at = datetime('now')
+            WHERE id = ?
+        """, (row["id"],))
+        conn.commit()
+
+        return {"id": row["id"], "url": row["url"]}
 
     def update_detail(self, flat_id: int, details: dict) -> None:
         conn = self._get_conn()
 
-        detail_fields = [
-            "living_meters", "kitchen_meters", "ceiling_height",
-            "object_type", "layout_type",
-            "bathroom_type", "bathroom_count",
-            "window_view", "finish_type",
-            "balcony_count", "loggia_count", "has_furniture",
-            "year_of_construction", "house_material_type",
-            "floor_type",
-            "elevator_passenger", "elevator_cargo",
-            "entrances_count",
-            "has_garbage_chute", "has_ramp", "has_concierge",
-            "parking_type", "heating_type", "is_emergency",
-            "jk_name", "jk_class", "jk_deadline", "developer",
-            "cadastral_number", "encumbrances", "owners_count",
-        ]
-
         set_clauses = []
         values = []
-        for field in detail_fields:
+
+        for field in DETAIL_FIELDS:
             if field in details and details[field] is not None:
                 set_clauses.append(f"{field} = COALESCE(?, {field})")
                 val = details[field]
@@ -292,9 +277,11 @@ class FlatStorage:
                     val = int(val)
                 values.append(val)
 
-        set_clauses.append("detail_status = 'done'")
-        set_clauses.append("detail_attempts = detail_attempts + 1")
-        set_clauses.append("updated_at = datetime('now')")
+        set_clauses.extend([
+            "detail_status = 'done'",
+            "detail_attempts = detail_attempts + 1",
+            "updated_at = datetime('now')",
+        ])
 
         values.append(flat_id)
 
@@ -302,33 +289,28 @@ class FlatStorage:
         conn.execute(sql, values)
         conn.commit()
 
-
-
     def mark_failed(self, flat_id: int) -> None:
-        conn = self._get_conn()
-        conn.execute("""
-            UPDATE flats
-            SET detail_status = 'failed',
-                detail_attempts = detail_attempts + 1,
-                last_attempt_at = datetime('now'),
-                updated_at = datetime('now')
-            WHERE id = ?
-        """, (flat_id,))
-        conn.commit()
+
+        self._update_status(flat_id, DetailStatus.FAILED)
 
     def mark_blocked(self, flat_id: int) -> None:
+
+        self._update_status(flat_id, DetailStatus.BLOCKED)
+
+    def _update_status(self, flat_id: int, status: DetailStatus) -> None:
         conn = self._get_conn()
         conn.execute("""
             UPDATE flats
-            SET detail_status = 'blocked',
+            SET detail_status = ?,
                 detail_attempts = detail_attempts + 1,
                 last_attempt_at = datetime('now'),
                 updated_at = datetime('now')
             WHERE id = ?
-        """, (flat_id,))
+        """, (status.value, flat_id))
         conn.commit()
 
     def reset_blocked(self) -> int:
+
         conn = self._get_conn()
         cursor = conn.execute("""
             UPDATE flats
@@ -338,81 +320,116 @@ class FlatStorage:
         conn.commit()
         count = cursor.rowcount
         if count:
-            logger.info(f" Сброшено {count} blocked → pending")
+            logger.info(f"  Сброшено {count} blocked → pending")
         return count
 
-    def get_stats(self) -> dict:
+    def reset_stale_in_progress(
+        self,
+        timeout_minutes: int = 60,
+    ) -> int:
+
         conn = self._get_conn()
-        stats = {}
-        stats["total"] = conn.execute(
-            "SELECT COUNT(*) FROM flats"
-        ).fetchone()[0]
+        cutoff = (
+            datetime.now() - timedelta(minutes=timeout_minutes)
+        ).isoformat()
+
+        cursor = conn.execute("""
+            UPDATE flats
+            SET detail_status = 'pending'
+            WHERE detail_status = 'in_progress'
+              AND (last_attempt_at IS NULL OR last_attempt_at < ?)
+        """, (cutoff,))
+        conn.commit()
+        count = cursor.rowcount
+        if count:
+            logger.info(f"  Сброшено {count} in_progress → pending")
+        return count
+
+
+    def get_stats(self) -> dict:
+
+        conn = self._get_conn()
+        rows = conn.execute("""
+            SELECT detail_status, COUNT(*) as cnt
+            FROM flats
+            GROUP BY detail_status
+        """).fetchall()
+
+        stats = {row["detail_status"]: row["cnt"] for row in rows}
+        stats["total"] = sum(stats.values())
+
 
         for status in DetailStatus:
-            stats[status.value] = conn.execute(
-                "SELECT COUNT(*) FROM flats WHERE detail_status = ?",
-                (status.value,),
-            ).fetchone()[0]
+            stats.setdefault(status.value, 0)
 
         return stats
 
     def get_coverage(self) -> dict:
+
         conn = self._get_conn()
-        total = conn.execute(
-            "SELECT COUNT(*) FROM flats"
-        ).fetchone()[0]
 
+        total = conn.execute("SELECT COUNT(*) FROM flats").fetchone()[0]
         if total == 0:
-
-
             return {}
 
-        fields = [
-            "price", "total_meters", "rooms_count",
-            "floor", "floors_count", "district",
-            "microdistrict", "street", "house_number",
-            "living_meters", "kitchen_meters",
-            "ceiling_height", "object_type",
-            "year_of_construction", "house_material_type",
-            "finish_type", "bathroom_type", "bathroom_count",
-            "elevator_passenger", "elevator_cargo",
-            "parking_type", "floor_type",
-            "heating_type", "balcony_count",
-            "loggia_count", "window_view",
-            "layout_type", "has_furniture",
-        ]
+
+        parts = []
+        for field in COVERAGE_FIELDS:
+            parts.append(
+                f"SUM(CASE WHEN {field} IS NOT NULL "
+                f"AND {field} != '' "
+                f"AND {field} != 0 "
+                f"THEN 1 ELSE 0 END) AS {field}"
+            )
+
+        sql = f"SELECT {', '.join(parts)} FROM flats"
+        row = conn.execute(sql).fetchone()
 
         coverage = {}
-        for field in fields:
-            filled = conn.execute(f"""
-                SELECT COUNT(*) FROM flats
-                WHERE {field} IS NOT NULL
-                AND {field} != ''
-                AND {field} != 0
-            """).fetchone()[0]
+        for i, field in enumerate(COVERAGE_FIELDS):
+            filled = row[i] or 0
             coverage[field] = round(filled / total * 100, 1)
 
         return coverage
 
-    def export_to_csv(self, filepath: str) -> None:
-        conn = self._get_conn()
-        df = pd.read_sql_query(
-            "SELECT * FROM flats ORDER BY district, street",
-            conn,
-        )
-        df.to_csv(filepath, index=False, sep=";", encoding="utf-8")
-        logger.info(f" Экспорт: {filepath} ({len(df)} записей)")
 
-    def export_done_to_csv(self, filepath: str) -> None:
-        conn = self._get_conn()
-        df = pd.read_sql_query(
-            "SELECT * FROM flats WHERE detail_status = 'done' ORDER BY district",
-            conn,
+    def export_to_csv(self, filepath: str) -> int:
+
+        return self._export(
+            filepath,
+            "SELECT * FROM flats ORDER BY district, street",
         )
+
+    def export_done_to_csv(self, filepath: str) -> int:
+
+        return self._export(
+            filepath,
+            "SELECT * FROM flats WHERE detail_status = 'done' "
+            "ORDER BY district",
+        )
+
+    def _export(self, filepath: str, query: str) -> int:
+        conn = self._get_conn()
+        df = pd.read_sql_query(query, conn)
         df.to_csv(filepath, index=False, sep=";", encoding="utf-8")
-        logger.info(f" Экспорт (done): {filepath} ({len(df)} записей)")
+        logger.info(f"  Экспорт: {filepath} ({len(df)} записей)")
+        return len(df)
+
 
     def close(self) -> None:
+
         if self._conn:
             self._conn.close()
             self._conn = None
+
+    def __enter__(self) -> "FlatStorage":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
