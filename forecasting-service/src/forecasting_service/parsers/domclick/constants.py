@@ -2,7 +2,6 @@ BASE_URL = "https://vladivostok.domclick.ru"
 SEARCH_URL = f"{BASE_URL}/search"
 CARD_URL_PREFIX = f"{BASE_URL}/card"
 
-# aids=57471 — владивосток
 VLADIVOSTOK_AID = "57471"
 
 ROOM_PARAMS = {

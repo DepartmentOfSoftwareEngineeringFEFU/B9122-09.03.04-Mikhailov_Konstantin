@@ -1,7 +1,6 @@
 import requests
 
-# Скопируй ВЕСЬ qrator_jsid2 cookie из Burp
-QRATOR_COOKIE = "v2.0.1774767075.327.5b4ef59arRe65cxs|Ph5ifcs48ecAxkgh|v1HVasyN5eWVQw093so6s/hXori8aNVTDeHoXuL/BpeFtXdleNy0PvuYf6gcBTMfHetnFayK4JFbjgflE7luyHaig5adYBaQoeQ1CxHKNvJYNw/U6YogDJ13XyZjtgT5e4+XvFV96X6YMFbx3jpH2PqwhGT6eL7ntFQVgszIJjREVh9I/o7wmxFrK/U+lQEd-MZLglTDGQdWm0KmA0o8/FmjMPug="
+QRATOR_COOKIE = ""
 cookies = {
     "qrator_jsid2": QRATOR_COOKIE,
 }
@@ -17,7 +16,6 @@ headers = {
     "Sec-Fetch-User": "?1",
 }
 
-# Тест 1: Листинг
 url = (
     "https://vladivostok.domclick.ru/search?"
     "deal_type=sale&category=living"
@@ -31,11 +29,9 @@ print(f"Length: {len(resp.text)}")
 print(f"Has cards: {'offers-list__item' in resp.text}")
 print(f"Has qrator block: {'необычно' in resp.text.lower()}")
 
-# Сохрани для анализа
 with open("domclick_listing_test.html", "w", encoding="utf-8") as f:
     f.write(resp.text)
 
-# Тест 2: Детальная страница
 detail_url = "https://vladivostok.domclick.ru/card/sale__flat__2072723582"
 resp2 = requests.get(detail_url, headers=headers, cookies=cookies)
 print(f"\nDetail Status: {resp2.status_code}")

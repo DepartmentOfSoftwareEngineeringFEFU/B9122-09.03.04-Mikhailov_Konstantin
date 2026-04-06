@@ -1,10 +1,4 @@
 def progress_bar(pct: float, width: int = 20) -> str:
-    """
-    Генерирует текстовый прогресс-бар.
-
-    >>> progress_bar(75.0)
-    '███████████████░░░░░'
-    """
     filled = int(pct / (100 / width))
     filled = max(0, min(filled, width))
     return "█" * filled + "░" * (width - filled)
