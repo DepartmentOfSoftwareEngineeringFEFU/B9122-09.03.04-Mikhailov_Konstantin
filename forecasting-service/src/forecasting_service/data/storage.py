@@ -55,6 +55,8 @@ class FlatStorage:
             CREATE TABLE IF NOT EXISTS flats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 url TEXT UNIQUE NOT NULL,
+                source TEXT DEFAULT '',
+                source_id TEXT,
                 cian_id INTEGER,
 
                 price INTEGER,
@@ -124,6 +126,10 @@ class FlatStorage:
                 ON flats(cian_id);
             CREATE INDEX IF NOT EXISTS idx_district
                 ON flats(district);
+            CREATE INDEX IF NOT EXISTS idx_source
+                ON flats(source);
+            CREATE INDEX IF NOT EXISTS idx_source_id
+                ON flats(source, source_id);
         """)
         conn.commit()
         logger.info(f"  БД инициализирована: {self.db_path}")
@@ -185,11 +191,16 @@ class FlatStorage:
         flat_dict: dict,
         url: str,
     ) -> None:
-        all_fields = ("url", "cian_id") + _LISTING_NUMERIC_FIELDS + _LISTING_TEXT_FIELDS
+        all_fields = ("url", "source", "source_id", "cian_id") + _LISTING_NUMERIC_FIELDS + _LISTING_TEXT_FIELDS
         field_names = ", ".join(all_fields) + ", detail_status"
         placeholders = ", ".join(["?"] * len(all_fields)) + ", 'pending'"
 
-        values = [url, flat_dict.get("cian_id")]
+        values = [
+            url,
+            flat_dict.get("source", ""),
+            flat_dict.get("source_id"),
+            flat_dict.get("cian_id"),
+        ]
         for field in _LISTING_NUMERIC_FIELDS:
             values.append(flat_dict.get(field))
         for field in _LISTING_TEXT_FIELDS:
