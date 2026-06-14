@@ -12,12 +12,17 @@ dependencies = [
     "cianparser>=1.0.4",
     "loguru>=0.7.3",
     "lxml>=6.0.2",
+    "matplotlib>=3.11.0",
     "pandas>=3.0.1",
     "pydantic>=2.12.5",
+    "scikit-learn>=1.9.0",
+    "seaborn>=0.13.2",
     "selenium>=4.41.0",
     "selenium-stealth>=1.0.6",
     "setuptools>=82.0.0",
+    "shap>=0.52.0",
     "undetected-chromedriver>=3.5.5",
+    "xgboost>=3.2.0",
 ]
 
 [project.scripts]
