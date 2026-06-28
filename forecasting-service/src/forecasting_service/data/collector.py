@@ -1,393 +1,453 @@
+import time
+
+import random
+
 from datetime import datetime
+
 from pathlib import Path
+
 from typing import Optional
 
 from loguru import logger
 
+from forecasting_service.config import (
+
+    DATASETS_DIR,
+
+    CRITICAL_ML_FIELDS,
+
+    DEFAULT_BATCH_SIZE,
+
+    DEFAULT_DETAIL_DELAY,
+
+    DEFAULT_RESTART_EVERY,
+
+)
+
 from forecasting_service.data.storage import FlatStorage
 
+from forecasting_service.utils.formatting import (
 
-DATASETS_DIR = Path(__file__).resolve().parent.parent / "datasets"
+    format_stats_block,
 
+    format_coverage_block,
+
+    format_critical_fields,
+
+    format_session_report,
+
+)
 
 class DataCollector:
-    """
-    Высокоуровневый оркестратор сбора данных.
-
-
-
-  
-    Объединяет:
-    - Фаза 1: сбор листинга (CianListingParser)
-    - Фаза 2: сбор деталей (detail_runner)
-    - Экспорт данных
-    - Отчёты о покрытии
-    """
 
     def __init__(
+
         self,
+
         location: str = "Владивосток",
+
         db_name: str = "flats.db",
+
     ):
+
         self.location = location
+
         self.storage = FlatStorage(db_name=db_name)
 
     def collect_listings(
+
         self,
+
         rooms: tuple = ("studio", 1, 2, 3, 4, 5, 6),
+
         start_page: int = 1,
+
         end_page: int = 54,
+
         headless: bool = False,
+
         page_delay: tuple[float, float] = (5.0, 15.0),
+
     ) -> None:
-        """
-        Фаза 1: Сбор листинга → SQLite.
-        """
+
         from forecasting_service.parsers.cian.parser import (
+
             CianListingParser,
+
         )
 
-        logger.info("═" * 60)
-        logger.info(" ФАЗА 1: СБОР ЛИСТИНГА")
-        logger.info(f"   Город:    {self.location}")
-        logger.info(f"   Стр.:     {start_page}–{end_page}")
-        logger.info(f"   Комнаты:  {rooms}")
-        logger.info("═" * 60)
+        self._log_phase_header(
+
+            phase=1,
+
+            title="СБОР ЛИСТИНГА",
+
+            extra={
+
+                "Город": self.location,
+
+                "Стр.": f"{start_page}–{end_page}",
+
+                "Комнаты": str(rooms),
+
+            },
+
+        )
 
         parser = CianListingParser(
+
             location=self.location,
+
             headless=headless,
+
             page_delay=page_delay,
+
             storage=self.storage,
+
         )
 
         parser.collect(
+
             rooms=rooms,
+
             start_page=start_page,
+
             end_page=end_page,
+
         )
 
-        self._print_stats()
+        logger.info(format_stats_block(self.storage.get_stats()))
 
     def collect_details(
+
         self,
-        batch_size: int = 30,
-        detail_delay: tuple[float, float] = (20.0, 40.0),
-        restart_every: int = 7,
+
+        batch_size: int = DEFAULT_BATCH_SIZE,
+
+        detail_delay: tuple[float, float] = DEFAULT_DETAIL_DELAY,
+
+        restart_every: int = DEFAULT_RESTART_EVERY,
+
         headless: bool = False,
+
         reset_blocked: bool = False,
+
+        max_captcha: int = 10,
+
     ) -> None:
 
-
-  
-        """
-        Фаза 2: Сбор деталей из SQLite.
-        Resume-safe: можно вызывать многократно.
-        """
-        import time
-        import random
-
         from forecasting_service.parsers.common.browser import (
+
             BrowserManager,
+
             CaptchaDetectedError,
+
         )
+
         from forecasting_service.parsers.common.rate_limiter import (
+
             AdaptiveRateLimiter,
+
         )
+
         from forecasting_service.parsers.cian.detail_parser import (
+
             parse_detail_page,
+
+        )
+
+        from forecasting_service.parsers.common.warmup import (
+
+            perform_warmup,
+
+            perform_mini_warmup,
+
         )
 
         if reset_blocked:
+
             self.storage.reset_blocked()
+
+        self.storage.reset_stale_in_progress()
 
         stats = self.storage.get_stats()
 
-        logger.info("═" * 60)
-        logger.info(" ФАЗА 2: СБОР ДЕТАЛЕЙ")
-        logger.info(f"   Pending:  {stats['pending']}")
-        logger.info(f"   Done:     {stats['done']}")
-        logger.info(f"   Failed:   {stats['failed']}")
-        logger.info(f"   Blocked:  {stats['blocked']}")
-        logger.info(f"   Батч:     {batch_size}")
-        logger.info(
-            f"   Задержка: {detail_delay[0]}–{detail_delay[1]}с"
+        self._log_phase_header(
+
+            phase=2,
+
+            title="СБОР ДЕТАЛЕЙ",
+
+            extra={
+
+                "Pending": stats["pending"],
+
+                "Done": stats["done"],
+
+                "Failed": stats["failed"],
+
+                "Blocked": stats["blocked"],
+
+                "Батч": batch_size,
+
+                "Задержка": f"{detail_delay[0]}–{detail_delay[1]}с",
+
+            },
+
         )
-        logger.info("═" * 60)
 
         if stats["pending"] == 0 and stats["failed"] == 0:
-            logger.info(" Все объявления обработаны!")
+
+            logger.info("  Все объявления обработаны!")
+
             return
 
         browser = BrowserManager(
+
             headless=headless,
-            manual_captcha=True,
+
+            manual_captcha=not headless,
+
             captcha_wait_timeout=300,
+
         )
 
         rate_limiter = AdaptiveRateLimiter(
+
             base_detail_delay=detail_delay,
+
         )
 
         processed = 0
+
         success = 0
 
+        captcha_count = 0
+
         try:
+
             browser.start()
 
-            # Warm-up
-            self._warmup(browser)
+            perform_warmup(browser, self.location)
 
             while processed < batch_size:
+
                 flat = self.storage.get_next_for_detail()
 
-
-  
                 if not flat:
-                    logger.info(" Нет объявлений для обработки")
+
+                    logger.info("  Нет объявлений для обработки")
+
                     break
 
                 flat_id = flat["id"]
+
                 url = flat["url"]
+
                 processed += 1
 
                 logger.info(
+
                     f"  [{processed}/{batch_size}] "
+
                     f"id={flat_id} {url[:50]}..."
+
                 )
 
-                # Рестарт браузера периодически
-                if (
-                    processed > 1
-                    and processed % restart_every == 0
-                ):
-                    logger.info(" Рестарт браузера...")
+                if processed > 1 and processed % restart_every == 0:
+
+                    logger.info("  Рестарт браузера...")
+
                     browser.restart_with_new_ua()
+
                     time.sleep(random.uniform(3, 5))
-                    self._mini_warmup(browser)
+
+                    perform_mini_warmup(browser, self.location)
 
                 rate_limiter.wait_between_details()
 
                 try:
+
                     html = browser.get_page(url, scroll=True)
+
                     details = parse_detail_page(html)
 
                     self.storage.update_detail(flat_id, details)
+
                     rate_limiter.record_success()
+
                     success += 1
 
                     filled = sum(
+
                         1 for v in details.values()
+
                         if v is not None and v != ""
+
                     )
-                    logger.info(f"   {filled} полей")
+
+                    logger.info(f"    {filled} полей")
 
                 except CaptchaDetectedError:
+
                     self.storage.mark_blocked(flat_id)
+
                     rate_limiter.record_captcha()
+
+                    captcha_count += 1
+
                     logger.warning(
-                        f"   CAPTCHA "
+
+                        f"  CAPTCHA #{captcha_count} "
+
                         f"(×{rate_limiter.multiplier:.1f})"
+
                     )
 
-                    if rate_limiter.multiplier >= 4.0:
-                        logger.error("Слишком много CAPTCHA")
+                    if captcha_count >= max_captcha:
+
+                        logger.error(
+
+                            f"  Достигнут лимит CAPTCHA ({max_captcha})"
+
+                        )
+
                         break
 
                 except Exception as e:
+
                     self.storage.mark_failed(flat_id)
+
                     rate_limiter.record_error()
-                    logger.warning(f"   {e}")
+
+                    logger.warning(f"  Ошибка: {e}")
+
+        except KeyboardInterrupt:
+
+            logger.warning("  Прервано пользователем (Ctrl+C)")
 
         finally:
+
             browser.stop()
 
-        self._print_session_report(
+        report = format_session_report(
 
+            processed=processed,
 
-  
-            processed, success, rate_limiter
+            success=success,
+
+            captcha_count=captcha_count,
+
+            multiplier=rate_limiter.multiplier,
+
+            stats=self.storage.get_stats(),
+
+            coverage=self.storage.get_coverage(),
+
         )
 
-    def _warmup(self, browser: "BrowserManager") -> None:
-        """Warm-up: имитация захода на сайт."""
-        import time
-        import random
-
-        from forecasting_service.parsers.common.browser import (
-            CaptchaDetectedError,
-        )
-
-        logger.info(" Warm-up: заходим на ЦИАН...")
-        try:
-            browser.get_page(
-                "https://vladivostok.cian.ru/",
-                scroll=True,
-            )
-            time.sleep(random.uniform(3, 7))
-
-            browser.get_page(
-                "https://vladivostok.cian.ru/cat.php?"
-                "deal_type=sale&engine_version=2"
-                "&offer_type=flat&region=4701",
-                scroll=True,
-            )
-            time.sleep(random.uniform(5, 10))
-
-            logger.info(" Warm-up завершён")
-        except CaptchaDetectedError:
-            logger.warning("CAPTCHA на warm-up, продолжаем...")
-        except Exception as e:
-            logger.warning(f"Ошибка warm-up: {e}")
-
-    def _mini_warmup(self, browser: "BrowserManager") -> None:
-        """Мини warm-up после рестарта браузера."""
-        import time
-        import random
-
-        from forecasting_service.parsers.common.browser import (
-            CaptchaDetectedError,
-        )
-
-        try:
-            browser.get_page(
-                "https://vladivostok.cian.ru/",
-                scroll=False,
-            )
-            time.sleep(random.uniform(3, 7))
-        except (CaptchaDetectedError, Exception):
-            pass
+        logger.info(report)
 
     def export_csv(
+
         self,
+
         filename: Optional[str] = None,
+
         only_done: bool = False,
+
     ) -> Path:
-        """Экспорт данных в CSV."""
+
         DATASETS_DIR.mkdir(parents=True, exist_ok=True)
 
-
-
-  
         if filename is None:
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
             suffix = "_done" if only_done else "_all"
-            filename = (
-                f"vladivostok{suffix}_{timestamp}.csv"
-            )
+
+            filename = f"vladivostok{suffix}_{timestamp}.csv"
 
         filepath = DATASETS_DIR / filename
 
         if only_done:
+
             self.storage.export_done_to_csv(str(filepath))
+
         else:
+
             self.storage.export_to_csv(str(filepath))
 
         return filepath
 
     def print_coverage(self) -> None:
-        """Печатает отчёт о покрытии полей."""
+
         stats = self.storage.get_stats()
+
         coverage = self.storage.get_coverage()
+
         total = stats["total"]
 
         print("\n" + "═" * 60)
-        print(" ОТЧЁТ О ПОКРЫТИИ ДАТАСЕТА")
+
+        print("  ОТЧЁТ О ПОКРЫТИИ ДАТАСЕТА")
+
         print("═" * 60)
 
-        print(f"\n Всего: {total}")
-        print(f"    Done:    {stats['done']}")
-        print(f"    Pending: {stats['pending']}")
-        print(f"    Failed:  {stats['failed']}")
-        print(f"    Blocked: {stats['blocked']}")
+        print(f"\n  Всего: {total}")
+
+        print(f"  Done:    {stats['done']}")
+
+        print(f"  Pending: {stats['pending']}")
+
+        print(f"  Failed:  {stats['failed']}")
+
+        print(f"  Blocked: {stats['blocked']}")
 
         if not coverage:
-            print("\n Нет данных")
+
+            print("\n  Нет данных")
+
             return
 
         done_pct = stats["done"] / total * 100 if total else 0
-        print(f"\n Детали собраны: {done_pct:.1f}%")
 
-        print(f"\n{'Поле':<25} {'Покрытие':>10}")
-        print("─" * 50)
+        print(f"\n  Детали собраны: {done_pct:.1f}%")
 
-        for field, pct in sorted(
-            coverage.items(), key=lambda x: -x[1]
-        ):
-            filled = int(pct / 100 * total)
-            bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
-            print(
-                f"   {field:<22} {bar} "
-                f"{filled:>4}/{total} {pct:>5.1f}%"
-            )
+        print(format_coverage_block(coverage, total))
 
-        # Критичные поля для ML
-        critical = [
-            "price", "total_meters", "rooms_count",
-            "district", "floor", "floors_count",
-            "year_of_construction", "house_material_type",
-            "finish_type",
-        ]
+        print(format_critical_fields(coverage, CRITICAL_ML_FIELDS))
 
+    @staticmethod
 
+    def _log_phase_header(
 
-  
-        print(f"\n Критичные поля для ML:")
-        for field in critical:
-            pct = coverage.get(field, 0)
-            icon = "" if pct >= 75 else "" if pct >= 50 else ""
-            print(f"   {icon} {field:<25} {pct:.1f}%")
+        phase: int,
 
-    def _print_stats(self) -> None:
-        """Печатает статистику БД."""
-        stats = self.storage.get_stats()
-        logger.info(f"\n{'═' * 50}")
-        logger.info(f" СОСТОЯНИЕ БД:")
-        logger.info(f"   Всего:   {stats['total']}")
-        logger.info(f"   Pending: {stats['pending']}")
-        logger.info(f"   Done:    {stats['done']}")
-        logger.info(f"   Failed:  {stats['failed']}")
-        logger.info(f"   Blocked: {stats['blocked']}")
-        logger.info(f"{'═' * 50}")
+        title: str,
 
-    def _print_session_report(
-        self,
-        processed: int,
-        success: int,
-        rate_limiter,
+        extra: dict[str, object],
+
     ) -> None:
-        """Печатает отчёт по сессии Фазы 2."""
-        stats = self.storage.get_stats()
 
-        logger.info(f"\n{'═' * 60}")
-        logger.info(" РЕЗУЛЬТАТ СЕССИИ")
-        logger.info(f"   Обработано: {processed}")
-        logger.info(f"   Успешно:    {success}")
-        logger.info(f"   CAPTCHA:    {rate_limiter.total_captchas}")
-        logger.info(f"   Множитель:  ×{rate_limiter.multiplier:.1f}")
-        logger.info(f"\n СОСТОЯНИЕ БД")
-        logger.info(f"   Всего:   {stats['total']}")
-        logger.info(f"   Done:    {stats['done']}")
-        logger.info(f"   Pending: {stats['pending']}")
-        logger.info(f"   Failed:  {stats['failed']}")
-        logger.info(f"   Blocked: {stats['blocked']}")
+        logger.info("═" * 60)
 
-        coverage = self.storage.get_coverage()
-        if coverage:
-            logger.info(f"\n ПОКРЫТИЕ ПОЛЕЙ")
-            for field, pct in sorted(
-                coverage.items(), key=lambda x: -x[1]
-            ):
-                bar = (
-                    "█" * int(pct / 5)
-                    + "░" * (20 - int(pct / 5))
-                )
-                logger.info(
-                    f"   {field:<25} {bar} {pct}%"
-                )
+        logger.info(f"  ФАЗА {phase}: {title}")
 
-        logger.info(f"{'═' * 60}")
+        for key, value in extra.items():
+
+            logger.info(f"  {key:<12} {value}")
+
+        logger.info("═" * 60)
 
     def close(self) -> None:
-        """Закрывает соединение с БД."""
+
         self.storage.close()
+
+    def __enter__(self) -> "DataCollector":
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+
+        self.close()
