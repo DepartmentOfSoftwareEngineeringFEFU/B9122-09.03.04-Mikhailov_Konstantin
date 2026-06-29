@@ -7,9 +7,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-from src.config import settings
-from src.external.database.models import Base
-from src.external.database.models import UserModel, AuditLogModel, RefreshSessionModel, TokenBlacklistModel, UserTokenRevocationModel
+from src.auth_service.config import settings
+from src.auth_service.external.database.models import Base
+from src.auth_service.external.database.models import UserModel, AuditLogModel, RefreshSessionModel, TokenBlacklistModel, UserTokenRevocationModel
 
 
 # this is the Alembic Config object, which provides
