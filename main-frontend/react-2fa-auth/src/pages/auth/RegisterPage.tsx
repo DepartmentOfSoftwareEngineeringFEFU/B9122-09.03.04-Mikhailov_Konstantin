@@ -26,7 +26,7 @@ export function RegisterPage() {
   const onSubmit = async (data: RegisterFormData) => {
     try {
       await registerUser(data.email, data.password, data.username || undefined)
-      toast.success('Регистрация успешна! Проверьте почту для подтверждения.')
+      toast.success('Регистрация успешна!')
       navigate(ROUTES.LOGIN)
     } catch (error) {
       handleError(error, 'Ошибка регистрации')
@@ -57,7 +57,7 @@ export function RegisterPage() {
         <Input
           {...register('username')}
           label="Имя пользователя"
-          placeholder="username (необязательно)"
+          placeholder="username"
           error={errors.username?.message}
           leftIcon={<User className="h-4 w-4" />}
           hint="Только буквы, цифры и _"

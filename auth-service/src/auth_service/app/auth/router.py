@@ -215,7 +215,7 @@ async def list_sessions(
     )
 
 
-@router.post(
+@router.get(
     "/email-confirm",
     response_model=ApiResponse[MessageResponse],
     summary="Confirm email address",

@@ -72,9 +72,12 @@ class AuthService:
                 email=email,
                 password_hash=self._hasher.hash(password),
                 phone_number=phone_number,
-                is_active=False,
+                is_active=True,
+                is_email_verified = True,
             )
+
             created_user = await self._uow.users.create(user)
+            created_user.is_email_verified = True
 
             await self._uow.audit.log(
                 action=AuditAction.USER_REGISTERED.value,
@@ -87,7 +90,7 @@ class AuthService:
             )
             await self._uow.commit()
 
-            await self._send_confirmation_email(created_user)
+            #await self._send_confirmation_email(created_user)
             return created_user
 
     async def login(

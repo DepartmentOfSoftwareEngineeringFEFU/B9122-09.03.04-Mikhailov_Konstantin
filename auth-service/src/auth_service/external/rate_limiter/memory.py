@@ -45,7 +45,7 @@ class InMemoryRateLimiter(RateLimiterProtocol):
                 await self._cleanup_stale_entries_locked(now)
 
                 if len(self._buckets) >= self.MAX_KEYS:
-                    raise RateLimitExceededError(retry_after=60)
+                    raise RateLimitExceededError(retry_after=1)
 
             bucket = self._buckets[key]
             cutoff = now - window_seconds
