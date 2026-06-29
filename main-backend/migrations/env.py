@@ -10,11 +10,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-from src.main_backend.config import settings
+from src.auth_service.main_backend.config import settings
 
-from src.main_backend.external.database.models import Base
+from src.auth_service.main_backend.external.database.models import Base
 
-from src.main_backend.external.database.models import PredictionModel
+from src.auth_service.main_backend.external.database.models import PredictionModel
 
 config = context.config
 
