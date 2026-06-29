@@ -99,13 +99,75 @@ INTERNAL_SERVICE_TOKEN — токен для internal API
 POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT
 AUTH_POSTGRES_DB, MAIN_POSTGRES_DB
 VITE_API_AUTH_URL, VITE_API_MAIN_URL — URL для фронтенда
-
 ```
-
 ## 6 Регистрация и авторизация
 При запуске всех сервисов по адресу ``` localhost:3000 ``` откроется пользовательский интерфейс.
 
 Для быстрой демонстрации функция подтвеждения email временно отлючена, поэтому для регистрации можно использовать произвольный email адрес.
 
 После регистрации по адресу ```localhost:3000/login``` пройдите этап авторизации для входа в систему.
+
+## 7 Порты и доступ к сервисам
+
+| Сервис | URL / Порт | Описание |
+| :--- | :--- | :--- |
+| **Frontend (UI)** | [http://localhost:3000](http://localhost:3000) | Основное веб-приложение (React) |
+| **auth сервис** | [http://localhost:8001/docs](http://localhost:8001/docs) | Документация |
+| **main-backend сервис** | [http://localhost:8002/docs](http://localhost:8002/docs) | Документация |
+| **forecasting сервис** | [http://localhost:8003/docs](http://localhost:8003/docs) | Документация  |
+
+## Скриншоты Реализации
+
+Ниже приведены основные экраны пользовательского интерфейса системы.
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/login.png" alt="Экран авторизации" />
+      <br />
+      <strong>Авторизация</strong>
+      <br />
+      Форма логина
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/dashboard.png" alt="Дашборд" />
+      <br />
+      <strong>Дашборд</strong>
+      <br />
+      Дашборд с информацией о пользователе
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/register.png" alt="Регистрация" />
+      <br />
+      <strong>Регистрация</strong>
+      <br />
+      Форма регистрации
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/prognoz.png" alt="Прогноз" />
+      <br />
+      <strong>Прогноз</strong>
+      <br />
+      Страница прогноза
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/profile.png" alt="Профиль" />
+      <br />
+      <strong>Профиль</strong>
+      <br />
+      Страница профиля
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/resetpassword.png" alt="Смена пароля" />
+      <br />
+      <strong>Смена пароля</strong>
+      <br />
+      Форма смены пароля
+    </td>
+  </tr>
+</table>
+
+
 
