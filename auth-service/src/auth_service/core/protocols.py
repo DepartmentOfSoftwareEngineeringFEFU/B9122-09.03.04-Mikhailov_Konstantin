@@ -96,10 +96,38 @@ class AuditLogProtocol(Protocol):
 
 
 @runtime_checkable
+class TokenBlacklistProtocol(Protocol):
+    async def blacklist_token(
+        self,
+        jti: str,
+        user_uid: UUID,
+        expires_at: datetime,
+    ) -> None: ...
+
+    async def is_blacklisted(self, jti: str) -> bool: ...
+
+    async def are_blacklisted(self, jti_list: list[str]) -> list[str]: ...
+
+    async def blacklist_all_for_user(
+        self,
+        user_uid: UUID,
+        before: datetime,
+    ) -> None: ...
+
+    async def is_user_tokens_revoked(
+        self,
+        user_uid: UUID,
+        issued_at: datetime,
+    ) -> bool: ...
+
+    async def cleanup_expired(self) -> int: ...
+
+@runtime_checkable
 class UnitOfWorkProtocol(Protocol):
     users: UserRepositoryProtocol
     refresh_sessions: RefreshSessionRepositoryProtocol
     audit: AuditLogProtocol
+    token_blacklist: TokenBlacklistProtocol
 
     async def __aenter__(self) -> "UnitOfWorkProtocol": ...
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None: ...

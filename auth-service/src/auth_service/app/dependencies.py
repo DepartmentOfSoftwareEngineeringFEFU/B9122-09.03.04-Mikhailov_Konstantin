@@ -6,7 +6,10 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.auth_service.core.constants import UserRole
-from src.auth_service.core.exceptions import InsufficientPermissionsError
+from src.auth_service.core.exceptions import (
+    InsufficientPermissionsError,
+    TokenRevokedException,
+)
 from src.auth_service.core.protocols import (
     EmailServiceProtocol,
     PasswordHasherProtocol,
@@ -108,11 +111,32 @@ def get_admin_service(
 
 
 async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer_scheme)],
-    token_service: Annotated[TokenServiceProtocol, Depends(get_token_service)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials,
+        Depends(_bearer_scheme),
+    ],
+    token_service: Annotated[
+        TokenServiceProtocol,
+        Depends(get_token_service),
+    ],
+    uow: Annotated[
+        UnitOfWorkProtocol,
+        Depends(get_uow),
+    ],
 ) -> TokenPayload:
-    return token_service.decode_access_token(credentials.credentials)
+    payload = token_service.decode_access_token(credentials.credentials)
 
+    async with uow:
+        if await uow.token_blacklist.is_blacklisted(str(payload.jti)):
+            raise TokenRevokedException()
+
+        if await uow.token_blacklist.is_user_tokens_revoked(
+            user_uid=payload.sub,
+            issued_at=payload.iat,
+        ):
+            raise TokenRevokedException()
+
+    return payload
 
 def require_role(*roles: UserRole):
     async def _check_role(

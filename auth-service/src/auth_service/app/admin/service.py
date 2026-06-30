@@ -1,5 +1,6 @@
 import logging
 from uuid import UUID
+from datetime import datetime, timezone
 
 from src.auth_service.core.constants import AuditAction, UserRole
 from src.auth_service.core.exceptions import (
@@ -67,6 +68,12 @@ class AdminService:
             user.role = new_role
             updated = await self._uow.users.update(user)
 
+            revoked_before = datetime.now(timezone.utc)
+            await self._uow.token_blacklist.blacklist_all_for_user(
+                user_uid=user_uid,
+                before=revoked_before,
+            )
+
             await self._uow.audit.log(
                 action=AuditAction.ROLE_CHANGED.value,
                 actor_uid=actor_uid,
@@ -74,6 +81,7 @@ class AdminService:
                 details={
                     "old_role": old_role.value,
                     "new_role": new_role.value,
+                    "access_tokens_revoked_before": revoked_before.isoformat(),
                 },
                 ip_address=ip_address,
                 request_id=request_id,
@@ -114,12 +122,23 @@ class AdminService:
 
             await self._uow.users.delete(user_uid)
 
+            await self._uow.refresh_sessions.revoke_all_for_user(user_uid)
+
+            revoked_before = datetime.now(timezone.utc)
+            await self._uow.token_blacklist.blacklist_all_for_user(
+                user_uid=user_uid,
+                before=revoked_before,
+            )
+
             await self._uow.audit.log(
                 action=AuditAction.USER_DELETED.value,
                 actor_uid=actor_uid,
                 target_uid=user_uid,
                 ip_address=ip_address,
                 request_id=request_id,
+                details={
+                    "access_tokens_revoked_before": revoked_before.isoformat(),
+                },
             )
 
             await self._uow.commit()
@@ -144,12 +163,26 @@ class AdminService:
             user.is_active = False
             updated = await self._uow.users.update(user)
 
+            revoked_sessions = await self._uow.refresh_sessions.revoke_all_for_user(
+                user_uid,
+            )
+
+            revoked_before = datetime.now(timezone.utc)
+            await self._uow.token_blacklist.blacklist_all_for_user(
+                user_uid=user_uid,
+                before=revoked_before,
+            )
+
             await self._uow.audit.log(
                 action=AuditAction.USER_DEACTIVATED.value,
                 actor_uid=actor_uid,
                 target_uid=user_uid,
                 ip_address=ip_address,
                 request_id=request_id,
+                details={
+                    "revoked_sessions": revoked_sessions,
+                    "access_tokens_revoked_before": revoked_before.isoformat(),
+                },
             )
 
             await self._uow.commit()

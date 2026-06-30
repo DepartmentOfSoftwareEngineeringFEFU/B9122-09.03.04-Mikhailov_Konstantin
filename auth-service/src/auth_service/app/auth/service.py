@@ -323,10 +323,20 @@ class AuthService:
                     }
                 )
                 await self._uow.refresh_sessions.revoke_all_for_user(session.user_uid)
+
+                revoked_before = datetime.now(timezone.utc)
+                await self._uow.token_blacklist.blacklist_all_for_user(
+                    user_uid=session.user_uid,
+                    before=revoked_before,
+                )
+
                 await self._uow.audit.log(
                     action=AuditAction.USER_LOGOUT_ALL.value,
                     actor_uid=session.user_uid,
-                    details={"reason": "refresh_token_reuse_detected"},
+                    details={
+                        "reason": "refresh_token_reuse_detected",
+                        "access_tokens_revoked_before": revoked_before.isoformat(),
+                    },
                     ip_address=ip_address,
                     request_id=request_id,
                     success=False,
@@ -420,6 +430,12 @@ class AuthService:
 
             await self._uow.refresh_sessions.revoke(token_hash)
 
+            await self._uow.token_blacklist.blacklist_token(
+                jti=str(token_payload.jti),
+                user_uid=token_payload.sub,
+                expires_at=token_payload.exp,
+            )
+
             await self._uow.audit.log(
                 action=AuditAction.USER_LOGOUT.value,
                 actor_uid=token_payload.sub,
@@ -439,10 +455,19 @@ class AuthService:
                 token_payload.sub
             )
 
+            revoked_before = datetime.now(timezone.utc)
+            await self._uow.token_blacklist.blacklist_all_for_user(
+                user_uid=token_payload.sub,
+                before=revoked_before,
+            )
+
             await self._uow.audit.log(
                 action=AuditAction.USER_LOGOUT_ALL.value,
                 actor_uid=token_payload.sub,
-                details={"revoked_sessions": revoked_count},
+                details={
+                    "revoked_sessions": revoked_count,
+                    "access_tokens_revoked_before": revoked_before.isoformat(),
+                },
                 ip_address=ip_address,
                 request_id=request_id,
             )
@@ -551,11 +576,20 @@ class AuthService:
 
             revoked = await self._uow.refresh_sessions.revoke_all_for_user(user.uid)
 
+            revoked_before = datetime.now(timezone.utc)
+            await self._uow.token_blacklist.blacklist_all_for_user(
+                user_uid=user.uid,
+                before=revoked_before,
+            )
+
             await self._uow.audit.log(
                 action=AuditAction.PASSWORD_RESET_COMPLETED.value,
                 actor_uid=user.uid,
                 target_uid=user.uid,
-                details={"revoked_sessions": revoked},
+                details={
+                    "revoked_sessions": revoked,
+                    "access_tokens_revoked_before": revoked_before.isoformat(),
+                },
                 ip_address=ip_address,
                 request_id=request_id,
             )
