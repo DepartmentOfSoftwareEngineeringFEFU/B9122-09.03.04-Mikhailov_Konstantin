@@ -15,9 +15,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        request_id = request.headers.get(
-            "X-Request-ID", str(uuid4())
-        )
+        request_id = request.headers.get("X-Request-ID", str(uuid4()))
         request.state.request_id = request_id
 
         start_time = time.perf_counter()
@@ -34,9 +32,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
-        duration_ms = round(
-            (time.perf_counter() - start_time) * 1000, 2
-        )
+        duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Process-Time-Ms"] = str(duration_ms)

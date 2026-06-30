@@ -127,8 +127,7 @@ async def activate_user(
     "/audit-log",
     response_model=ApiResponse[list[AuditLogEntry]],
     summary="View audit log",
-    description="Requires ADMIN or OWNER role. "
-                "Filter by user_uid or action.",
+    description="Requires ADMIN or OWNER role. " "Filter by user_uid or action.",
 )
 async def get_audit_log(
     current_user: AdminUser,
@@ -144,6 +143,4 @@ async def get_audit_log(
         offset=offset,
         limit=limit,
     )
-    return ApiResponse(
-        data=[AuditLogEntry(**e) for e in entries]
-    )
+    return ApiResponse(data=[AuditLogEntry(**e) for e in entries])

@@ -16,7 +16,7 @@ from src.auth_service.app.auth.schemas import (
     LogoutRequest,
     ActiveSessionResponse,
     AuthTokenRequest,
-    AuthTokenResponse
+    AuthTokenResponse,
 )
 from src.auth_service.app.auth.service import AuthService
 from src.auth_service.app.dependencies import CurrentUser, get_auth_service
@@ -83,7 +83,7 @@ async def login(
     tokens = await service.login(
         email=data.email,
         password=data.password,
-        #totp_code=data.totp_code,
+        # totp_code=data.totp_code,
         ip_address=_get_client_ip(request),
         user_agent=_get_user_agent(request),
         request_id=_get_request_id(request),
@@ -91,6 +91,7 @@ async def login(
     if "auth_token" in tokens:
         return ApiResponse(data=AuthTokenResponse(**tokens))
     return ApiResponse(data=TokenResponse(**tokens))
+
 
 @router.post(
     "/login/2fa",
@@ -126,6 +127,7 @@ async def refresh_tokens(
     tokens = await service.refresh_tokens(
         refresh_token=data.refresh_token,
         ip_address=_get_client_ip(request),
+        user_agent=_get_user_agent(request),
         request_id=_get_request_id(request),
     )
     return ApiResponse(data=TokenResponse(**tokens))
@@ -149,9 +151,8 @@ async def logout(
         ip_address=_get_client_ip(request),
         request_id=_get_request_id(request),
     )
-    return ApiResponse(
-        data=MessageResponse(message="Logged out successfully")
-    )
+    return ApiResponse(data=MessageResponse(message="Logged out successfully"))
+
 
 @router.post(
     "/resend-confirmation",
@@ -172,9 +173,10 @@ async def resend_confirmation(
     return ApiResponse(
         data=MessageResponse(
             message="If the email exists and is not yet confirmed, "
-                    "a confirmation link has been sent",
+            "a confirmation link has been sent",
         )
     )
+
 
 @router.post(
     "/logout-all",
@@ -193,9 +195,7 @@ async def logout_all(
         request_id=_get_request_id(request),
     )
     return ApiResponse(
-        data=MessageResponse(
-            message="Logged out from all devices successfully"
-        )
+        data=MessageResponse(message="Logged out from all devices successfully")
     )
 
 
@@ -230,9 +230,7 @@ async def confirm_email(
         ip_address=_get_client_ip(request),
         request_id=_get_request_id(request),
     )
-    return ApiResponse(
-        data=MessageResponse(message="Email confirmed successfully")
-    )
+    return ApiResponse(data=MessageResponse(message="Email confirmed successfully"))
 
 
 @router.post(
@@ -252,9 +250,7 @@ async def request_password_reset(
         request_id=_get_request_id(request),
     )
     return ApiResponse(
-        data=MessageResponse(
-            message="If the email exists, a reset link has been sent"
-        )
+        data=MessageResponse(message="If the email exists, a reset link has been sent")
     )
 
 
@@ -274,6 +270,4 @@ async def confirm_password_reset(
         ip_address=_get_client_ip(request),
         request_id=_get_request_id(request),
     )
-    return ApiResponse(
-        data=MessageResponse(message="Password reset successfully")
-    )
+    return ApiResponse(data=MessageResponse(message="Password reset successfully"))

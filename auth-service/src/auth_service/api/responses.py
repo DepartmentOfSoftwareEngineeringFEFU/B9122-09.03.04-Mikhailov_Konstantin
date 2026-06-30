@@ -10,9 +10,7 @@ class ApiResponse(BaseModel, Generic[T]):
     status: str = "success"
     data: T
     meta: dict[str, Any] = Field(default_factory=dict)
-    timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ErrorDetail(BaseModel):
@@ -24,9 +22,7 @@ class ErrorDetail(BaseModel):
 class ApiErrorResponse(BaseModel):
     status: str = "error"
     error: ErrorDetail
-    timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class PaginatedData(BaseModel, Generic[T]):

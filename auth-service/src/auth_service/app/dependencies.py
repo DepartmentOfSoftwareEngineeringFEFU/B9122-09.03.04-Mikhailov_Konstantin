@@ -6,7 +6,10 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.auth_service.core.constants import UserRole
-from src.auth_service.core.exceptions import InsufficientPermissionsError
+from src.auth_service.core.exceptions import (
+    InsufficientPermissionsError,
+    TokenRevokedException,
+)
 from src.auth_service.core.protocols import (
     EmailServiceProtocol,
     PasswordHasherProtocol,
@@ -34,6 +37,7 @@ logger = logging.getLogger(__name__)
 _bearer_scheme = HTTPBearer(auto_error=True)
 
 _rate_limiter = InMemoryRateLimiter()
+
 
 @lru_cache(maxsize=1)
 def get_password_hasher() -> PasswordHasherProtocol:
@@ -70,21 +74,13 @@ def get_uow() -> UnitOfWorkProtocol:
 
 def get_auth_service(
     uow: Annotated[UnitOfWorkProtocol, Depends(get_uow)],
-    hasher: Annotated[
-        PasswordHasherProtocol, Depends(get_password_hasher)
-    ],
-    token_service: Annotated[
-        TokenServiceProtocol, Depends(get_token_service)
-    ],
+    hasher: Annotated[PasswordHasherProtocol, Depends(get_password_hasher)],
+    token_service: Annotated[TokenServiceProtocol, Depends(get_token_service)],
     url_token_service: Annotated[
         URLSafeTokenServiceProtocol, Depends(get_url_token_service)
     ],
-    totp_service: Annotated[
-        TOTPServiceProtocol, Depends(get_totp_service)
-    ],
-    email_service: Annotated[
-        EmailServiceProtocol, Depends(get_email_service)
-    ],
+    totp_service: Annotated[TOTPServiceProtocol, Depends(get_totp_service)],
+    email_service: Annotated[EmailServiceProtocol, Depends(get_email_service)],
 ) -> AuthService:
     return AuthService(
         uow=uow,
@@ -98,12 +94,8 @@ def get_auth_service(
 
 def get_profile_service(
     uow: Annotated[UnitOfWorkProtocol, Depends(get_uow)],
-    hasher: Annotated[
-        PasswordHasherProtocol, Depends(get_password_hasher)
-    ],
-    totp_service: Annotated[
-        TOTPServiceProtocol, Depends(get_totp_service)
-    ],
+    hasher: Annotated[PasswordHasherProtocol, Depends(get_password_hasher)],
+    totp_service: Annotated[TOTPServiceProtocol, Depends(get_totp_service)],
 ) -> ProfileService:
     return ProfileService(
         uow=uow,
@@ -120,20 +112,35 @@ def get_admin_service(
 
 async def get_current_user(
     credentials: Annotated[
-        HTTPAuthorizationCredentials, Depends(_bearer_scheme)
+        HTTPAuthorizationCredentials,
+        Depends(_bearer_scheme),
     ],
     token_service: Annotated[
-        TokenServiceProtocol, Depends(get_token_service)
+        TokenServiceProtocol,
+        Depends(get_token_service),
+    ],
+    uow: Annotated[
+        UnitOfWorkProtocol,
+        Depends(get_uow),
     ],
 ) -> TokenPayload:
-    return token_service.decode_access_token(credentials.credentials)
+    payload = token_service.decode_access_token(credentials.credentials)
 
+    async with uow:
+        if await uow.token_blacklist.is_blacklisted(str(payload.jti)):
+            raise TokenRevokedException()
+
+        if await uow.token_blacklist.is_user_tokens_revoked(
+            user_uid=payload.sub,
+            issued_at=payload.iat,
+        ):
+            raise TokenRevokedException()
+
+    return payload
 
 def require_role(*roles: UserRole):
     async def _check_role(
-        current_user: Annotated[
-            TokenPayload, Depends(get_current_user)
-        ],
+        current_user: Annotated[TokenPayload, Depends(get_current_user)],
     ) -> TokenPayload:
         try:
             user_role = UserRole(current_user.role)

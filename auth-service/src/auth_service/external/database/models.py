@@ -34,9 +34,7 @@ class UserModel(Base):
     email: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True
     )
-    password_hash: Mapped[str] = mapped_column(
-        String(255), nullable=False
-    )
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     phone_number: Mapped[str | None] = mapped_column(
         String(20), unique=True, nullable=True, index=True
     )
@@ -55,9 +53,7 @@ class UserModel(Base):
     two_factor_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", nullable=False
     )
-    totp_secret: Mapped[str | None] = mapped_column(
-        String(500), nullable=True
-    )
+    totp_secret: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -72,7 +68,10 @@ class UserModel(Base):
     )
 
     is_email_verified: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default="false", nullable=False,
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
         comment="Email confirmed via link",
     )
 
@@ -85,27 +84,32 @@ class UserModel(Base):
         return f"<User {self.username} ({self.email})>"
 
 
-
 class TokenBlacklistModel(Base):
     __tablename__ = "token_blacklist"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     jti: Mapped[str] = mapped_column(
-        String(36), unique=True, nullable=False, index=True,
+        String(36),
+        unique=True,
+        nullable=False,
+        index=True,
     )
     user_uid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True,
+        UUID(as_uuid=True),
+        nullable=False,
+        index=True,
     )
     expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False,
+        DateTime(timezone=True),
+        nullable=False,
     )
     blacklisted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
 
-    __table_args__ = (
-        Index("ix_token_blacklist_expires", "expires_at"),
-    )
+    __table_args__ = (Index("ix_token_blacklist_expires", "expires_at"),)
 
 
 class UserTokenRevocationModel(Base):
@@ -113,50 +117,71 @@ class UserTokenRevocationModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_uid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), unique=True, nullable=False, index=True,
+        UUID(as_uuid=True),
+        unique=True,
+        nullable=False,
+        index=True,
     )
     revoked_before: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False,
+        DateTime(timezone=True),
+        nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
+
 
 class AuditLogModel(Base):
     __tablename__ = "audit_log"
 
     id: Mapped[int] = mapped_column(
-        primary_key=True, autoincrement=True,
+        primary_key=True,
+        autoincrement=True,
     )
 
     actor_uid: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True,
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True,
     )
 
     target_uid: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True,
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True,
     )
 
     action: Mapped[str] = mapped_column(
-        String(100), nullable=False, index=True,
+        String(100),
+        nullable=False,
+        index=True,
     )
 
     details: Mapped[dict | None] = mapped_column(
-        JSONB, nullable=True,
+        JSONB,
+        nullable=True,
     )
 
     ip_address: Mapped[str | None] = mapped_column(
-        String(45), nullable=True,
+        String(45),
+        nullable=True,
     )
     user_agent: Mapped[str | None] = mapped_column(
-        String(500), nullable=True,
+        String(500),
+        nullable=True,
     )
     request_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True,
+        String(36),
+        nullable=True,
+        index=True,
     )
 
     success: Mapped[bool] = mapped_column(
-        Boolean, default=True, nullable=False,
+        Boolean,
+        default=True,
+        nullable=False,
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -176,30 +201,41 @@ class RefreshSessionModel(Base):
     __tablename__ = "refresh_sessions"
 
     id: Mapped[int] = mapped_column(
-        primary_key=True, autoincrement=True,
+        primary_key=True,
+        autoincrement=True,
     )
 
     token_hash: Mapped[str] = mapped_column(
-        String(64), unique=True, nullable=False, index=True,
+        String(64),
+        unique=True,
+        nullable=False,
+        index=True,
         comment="SHA-256 hash of the refresh token",
     )
 
     user_uid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True,
+        UUID(as_uuid=True),
+        nullable=False,
+        index=True,
     )
 
     ip_address: Mapped[str | None] = mapped_column(
-        String(45), nullable=True,
+        String(45),
+        nullable=True,
     )
     user_agent: Mapped[str | None] = mapped_column(
-        String(500), nullable=True,
+        String(500),
+        nullable=True,
     )
     device_name: Mapped[str | None] = mapped_column(
-        String(100), nullable=True,
+        String(100),
+        nullable=True,
     )
 
     is_revoked: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False,
+        Boolean,
+        default=False,
+        nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -216,7 +252,8 @@ class RefreshSessionModel(Base):
     )
 
     replaced_by: Mapped[str | None] = mapped_column(
-        String(64), nullable=True,
+        String(64),
+        nullable=True,
     )
 
     __table_args__ = (

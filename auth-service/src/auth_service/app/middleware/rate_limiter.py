@@ -11,13 +11,19 @@ logger = logging.getLogger(__name__)
 
 def _get_rate_limiter() -> RateLimiterProtocol:
     from src.auth_service.app.dependencies import get_rate_limiter
+
     return get_rate_limiter()
 
 
 def _default_key_func(request: Request) -> str:
-    client_ip = request.headers.get(
-        "X-Forwarded-For", "",
-    ).split(",")[0].strip()
+    client_ip = (
+        request.headers.get(
+            "X-Forwarded-For",
+            "",
+        )
+        .split(",")[0]
+        .strip()
+    )
 
     if not client_ip and request.client:
         client_ip = request.client.host
@@ -47,9 +53,7 @@ class RateLimitDependency:
         ],
     ) -> None:
         key = self._key_func(request)
-        full_key = (
-            f"{self._prefix}:{key}" if self._prefix else key
-        )
+        full_key = f"{self._prefix}:{key}" if self._prefix else key
         await limiter.check_rate_limit(
             key=full_key,
             max_attempts=self._max_attempts,

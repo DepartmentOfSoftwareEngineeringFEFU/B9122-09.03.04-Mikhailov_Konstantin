@@ -26,6 +26,8 @@ from src.auth_service.external.security.refresh_token_service import (
     RefreshTokenService,
 )
 
+from datetime import datetime, timezone
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,11 +43,58 @@ class AuthService:
     ):
         self._uow = uow
         self._hasher = hasher
-        self._tokens = token_service 
+        self._tokens = token_service
         self._url_tokens = url_token_service
         self._totp = totp_service
         self._email = email_service
         self._refresh = RefreshTokenService()
+
+    async def _issue_tokens_for_user(
+        self,
+        user: UserEntity,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        request_id: str | None = None,
+    ) -> dict:
+
+        access_token = self._tokens.create_access_token(user)
+
+        plain_refresh_token = self._refresh.generate_token()
+        refresh_session = self._refresh.create_session(
+            token=plain_refresh_token,
+            user_uid=user.uid,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        active_count = await self._uow.refresh_sessions.count_active_sessions(
+            user.uid,
+        )
+        if active_count >= settings.MAX_SESSIONS_PER_USER:
+            sessions = await self._uow.refresh_sessions.get_active_sessions(
+                user.uid,
+            )
+            if sessions:
+                oldest = sessions[-1]
+                await self._uow.refresh_sessions.revoke(oldest.token_hash)
+
+        await self._uow.refresh_sessions.create(refresh_session)
+
+        await self._uow.audit.log(
+            action=AuditAction.USER_LOGIN_SUCCESS.value,
+            actor_uid=user.uid,
+            details={"device": refresh_session.device_name},
+            ip_address=ip_address,
+            user_agent=user_agent,
+            request_id=request_id,
+        )
+
+        return {
+            "access_token": access_token,
+            "refresh_token": plain_refresh_token,
+            "token_type": "bearer",
+            "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        }
 
     async def register(
         self,
@@ -62,36 +111,42 @@ class AuthService:
                 raise UserAlreadyExistsError(field="email")
             if await self._uow.users.exists_by_username(username):
                 raise UserAlreadyExistsError(field="username")
-            if phone_number and await self._uow.users.exists_by_phone(
-                phone_number
-            ):
+            if phone_number and await self._uow.users.exists_by_phone(phone_number):
                 raise UserAlreadyExistsError(field="phone number")
+
+            auto_verify = (
+                settings.AUTO_VERIFY_EMAIL_IN_DEV and not settings.is_production
+            )
 
             user = UserEntity(
                 username=username,
                 email=email,
                 password_hash=self._hasher.hash(password),
                 phone_number=phone_number,
-                is_active=True,
-                is_email_verified = True,
+                is_active=auto_verify,
+                is_email_verified=auto_verify,
             )
 
             created_user = await self._uow.users.create(user)
-            created_user.is_email_verified = True
 
             await self._uow.audit.log(
                 action=AuditAction.USER_REGISTERED.value,
                 actor_uid=created_user.uid,
                 target_uid=created_user.uid,
-                details={"username": username},
+                details={
+                    "username": username,
+                    "auto_verified": auto_verify,
+                },
                 ip_address=ip_address,
                 user_agent=user_agent,
                 request_id=request_id,
             )
             await self._uow.commit()
 
-            #await self._send_confirmation_email(created_user)
-            return created_user
+        if not auto_verify:
+            await self._send_confirmation_email(created_user)
+
+        return created_user
 
     async def login(
         self,
@@ -159,82 +214,25 @@ class AuthService:
 
             if user.two_factor_enabled:
                 auth_token = self._tokens.create_auth_token(user)
-                # redirect to 2fa
                 return {
                     "requires_2fa": True,
                     "auth_token": auth_token,
                     "expires_in": settings.JWT_AUTH_TOKEN_EXPIRE_MINUTES * 60,
                 }
-                # if not totp_code:
-                #     raise TwoFactorRequiredError()
-                # secret = self._totp.decrypt_secret(user.totp_secret)
-                # if not self._totp.verify_code(secret, totp_code):
-                #     await self._uow.audit.log(
-                #         action=AuditAction.TWO_FACTOR_FAILED.value,
-                #         actor_uid=user.uid,
-                #         ip_address=ip_address,
-                #         user_agent=user_agent,
-                #         request_id=request_id,
-                #         success=False,
-                #     )
-                #     await self._uow.commit()
-                #     raise InvalidTwoFactorCodeError()
 
             if self._hasher.needs_rehash(user.password_hash):
                 user.password_hash = self._hasher.hash(password)
                 await self._uow.users.update(user)
 
-            access_token = self._tokens.create_access_token(user)
-
-            plain_refresh_token = self._refresh.generate_token()
-            refresh_session = self._refresh.create_session(
-                token=plain_refresh_token,
-                user_uid=user.uid,
-                ip_address=ip_address,
-                user_agent=user_agent,
-            )
-
-            active_count = (
-                await self._uow.refresh_sessions.count_active_sessions(
-                    user.uid,
-                )
-            )
-            if active_count >= settings.MAX_SESSIONS_PER_USER:
-                sessions = (
-                    await self._uow.refresh_sessions.get_active_sessions(
-                        user.uid
-                    )
-                )
-                if sessions:
-                    oldest = sessions[-1]
-                    await self._uow.refresh_sessions.revoke(
-                        oldest.token_hash
-                    )
-
-            await self._uow.refresh_sessions.create(refresh_session)
-
-            await self._uow.audit.log(
-                action=AuditAction.USER_LOGIN_SUCCESS.value,
-                actor_uid=user.uid,
-                details={
-                    "device": refresh_session.device_name,
-                },
+            tokens = await self._issue_tokens_for_user(
+                user=user,
                 ip_address=ip_address,
                 user_agent=user_agent,
                 request_id=request_id,
             )
 
             await self._uow.commit()
-
-            return {
-                "access_token": access_token,
-                "refresh_token": plain_refresh_token,
-                "token_type": "bearer",
-                "expires_in": (
-                    settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
-                ),
-            }
-
+            return tokens
 
     async def login_2fa(
         self,
@@ -244,14 +242,41 @@ class AuthService:
         user_agent: str | None = None,
         request_id: str | None = None,
     ) -> dict:
-        
         async with self._uow:
             payload = self._tokens.decode_auth_token(auth_token)
             user = await self._uow.users.get_by_id(payload.sub)
 
-            if not totp_code:
-                raise TwoFactorRequiredError()
+            if user is None:
+                raise InvalidCredentialsError()
+
+            if not user.is_active:
+                await self._uow.audit.log(
+                    action=AuditAction.USER_LOGIN_FAILED.value,
+                    actor_uid=user.uid,
+                    details={"reason": "account_not_active"},
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    request_id=request_id,
+                    success=False,
+                )
+                await self._uow.commit()
+                raise AccountNotActiveError()
+
+            if not user.two_factor_enabled or not user.totp_secret:
+                await self._uow.audit.log(
+                    action=AuditAction.USER_LOGIN_FAILED.value,
+                    actor_uid=user.uid,
+                    details={"reason": "2fa_not_enabled"},
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    request_id=request_id,
+                    success=False,
+                )
+                await self._uow.commit()
+                raise InvalidCredentialsError()
+
             secret = self._totp.decrypt_secret(user.totp_secret)
+
             if not self._totp.verify_code(secret, totp_code):
                 await self._uow.audit.log(
                     action=AuditAction.TWO_FACTOR_FAILED.value,
@@ -263,63 +288,16 @@ class AuthService:
                 )
                 await self._uow.commit()
                 raise InvalidTwoFactorCodeError()
-            
 
-            #TODO: add invalidation
-            
-            access_token = self._tokens.create_access_token(user)
-
-            plain_refresh_token = self._refresh.generate_token()
-            refresh_session = self._refresh.create_session(
-                token=plain_refresh_token,
-                user_uid=user.uid,
-                ip_address=ip_address,
-                user_agent=user_agent,
-            )
-
-            active_count = (
-                await self._uow.refresh_sessions.count_active_sessions(
-                    user.uid,
-                )
-            )
-            if active_count >= settings.MAX_SESSIONS_PER_USER:
-                sessions = (
-                    await self._uow.refresh_sessions.get_active_sessions(
-                        user.uid
-                    )
-                )
-                if sessions:
-                    oldest = sessions[-1]
-                    await self._uow.refresh_sessions.revoke(
-                        oldest.token_hash
-                    )
-
-            await self._uow.refresh_sessions.create(refresh_session)
-
-            await self._uow.audit.log(
-                action=AuditAction.USER_LOGIN_SUCCESS.value,
-                actor_uid=user.uid,
-                details={
-                    "device": refresh_session.device_name,
-                },
+            tokens = await self._issue_tokens_for_user(
+                user=user,
                 ip_address=ip_address,
                 user_agent=user_agent,
                 request_id=request_id,
             )
 
             await self._uow.commit()
-
-            return {
-                "access_token": access_token,
-                "refresh_token": plain_refresh_token,
-                "token_type": "bearer",
-                "expires_in": (
-                    settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
-                ),
-            }
-
-            
-
+            return tokens
 
     async def refresh_tokens(
         self,
@@ -331,11 +309,7 @@ class AuthService:
         token_hash = self._refresh.hash_token(refresh_token)
 
         async with self._uow:
-            session = (
-                await self._uow.refresh_sessions.get_by_token_hash(
-                    token_hash
-                )
-            )
+            session = await self._uow.refresh_sessions.get_by_token_hash(token_hash)
 
             if session is None:
                 raise InvalidTokenError(reason="Refresh token not found")
@@ -348,13 +322,21 @@ class AuthService:
                         "ip_address": ip_address,
                     }
                 )
-                await self._uow.refresh_sessions.revoke_all_for_user(
-                    session.user_uid
+                await self._uow.refresh_sessions.revoke_all_for_user(session.user_uid)
+
+                revoked_before = datetime.now(timezone.utc)
+                await self._uow.token_blacklist.blacklist_all_for_user(
+                    user_uid=session.user_uid,
+                    before=revoked_before,
                 )
+
                 await self._uow.audit.log(
                     action=AuditAction.USER_LOGOUT_ALL.value,
                     actor_uid=session.user_uid,
-                    details={"reason": "refresh_token_reuse_detected"},
+                    details={
+                        "reason": "refresh_token_reuse_detected",
+                        "access_tokens_revoked_before": revoked_before.isoformat(),
+                    },
                     ip_address=ip_address,
                     request_id=request_id,
                     success=False,
@@ -371,7 +353,7 @@ class AuthService:
             user = await self._uow.users.get_by_id(session.user_uid)
             if user is None:
                 raise InvalidCredentialsError()
-            if not user.is_active:
+            if not user.is_active or not user.is_email_verified:
                 raise AccountNotActiveError()
 
             access_token = self._tokens.create_access_token(user)
@@ -386,11 +368,6 @@ class AuthService:
             await self._uow.refresh_sessions.mark_replaced(
                 old_token_hash=token_hash,
                 new_token_hash=new_session.token_hash,
-            )
-
-    
-            await self._uow.refresh_sessions.update_last_used(
-                new_session.token_hash,
             )
 
             await self._uow.refresh_sessions.create(new_session)
@@ -408,9 +385,7 @@ class AuthService:
                 "access_token": access_token,
                 "refresh_token": new_plain_token,
                 "token_type": "bearer",
-                "expires_in": (
-                    settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
-                ),
+                "expires_in": (settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60),
             }
 
     async def logout(
@@ -423,7 +398,43 @@ class AuthService:
         token_hash = self._refresh.hash_token(refresh_token)
 
         async with self._uow:
+            session = await self._uow.refresh_sessions.get_by_token_hash(
+                token_hash,
+            )
+
+            if session is None:
+                await self._uow.audit.log(
+                    action=AuditAction.USER_LOGOUT.value,
+                    actor_uid=token_payload.sub,
+                    details={"reason": "refresh_token_not_found"},
+                    ip_address=ip_address,
+                    request_id=request_id,
+                    success=False,
+                )
+                await self._uow.commit()
+                raise InvalidTokenError(reason="Refresh token not found")
+
+            if session.user_uid != token_payload.sub:
+                await self._uow.audit.log(
+                    action=AuditAction.USER_LOGOUT.value,
+                    actor_uid=token_payload.sub,
+                    details={"reason": "refresh_token_owner_mismatch"},
+                    ip_address=ip_address,
+                    request_id=request_id,
+                    success=False,
+                )
+                await self._uow.commit()
+                raise InvalidTokenError(
+                    reason="Refresh token does not belong to current user",
+                )
+
             await self._uow.refresh_sessions.revoke(token_hash)
+
+            await self._uow.token_blacklist.blacklist_token(
+                jti=str(token_payload.jti),
+                user_uid=token_payload.sub,
+                expires_at=token_payload.exp,
+            )
 
             await self._uow.audit.log(
                 action=AuditAction.USER_LOGOUT.value,
@@ -440,16 +451,23 @@ class AuthService:
         request_id: str | None = None,
     ) -> None:
         async with self._uow:
-            revoked_count = (
-                await self._uow.refresh_sessions.revoke_all_for_user(
-                    token_payload.sub
-                )
+            revoked_count = await self._uow.refresh_sessions.revoke_all_for_user(
+                token_payload.sub
+            )
+
+            revoked_before = datetime.now(timezone.utc)
+            await self._uow.token_blacklist.blacklist_all_for_user(
+                user_uid=token_payload.sub,
+                before=revoked_before,
             )
 
             await self._uow.audit.log(
                 action=AuditAction.USER_LOGOUT_ALL.value,
                 actor_uid=token_payload.sub,
-                details={"revoked_sessions": revoked_count},
+                details={
+                    "revoked_sessions": revoked_count,
+                    "access_tokens_revoked_before": revoked_before.isoformat(),
+                },
                 ip_address=ip_address,
                 request_id=request_id,
             )
@@ -457,26 +475,22 @@ class AuthService:
 
     async def get_active_sessions(self, user_uid) -> list[dict]:
         async with self._uow:
-            sessions = (
-                await self._uow.refresh_sessions.get_active_sessions(
-                    user_uid
-                )
-            )
+            sessions = await self._uow.refresh_sessions.get_active_sessions(user_uid)
             return [
                 {
                     "device": s.device_name or "Unknown device",
                     "ip_address": s.ip_address,
                     "created_at": s.created_at.isoformat(),
                     "last_used_at": (
-                        s.last_used_at.isoformat()
-                        if s.last_used_at else None
+                        s.last_used_at.isoformat() if s.last_used_at else None
                     ),
                 }
                 for s in sessions
             ]
 
     async def confirm_email(
-        self, token: str,
+        self,
+        token: str,
         ip_address: str | None = None,
         request_id: str | None = None,
     ) -> None:
@@ -494,8 +508,8 @@ class AuthService:
             if user is None:
                 raise UserNotFoundError()
             if user.is_email_verified:
-                return  
-            
+                return
+
             user.is_email_verified = True
             user.is_active = True
 
@@ -510,7 +524,8 @@ class AuthService:
             await self._uow.commit()
 
     async def request_password_reset(
-        self, email: str,
+        self,
+        email: str,
         ip_address: str | None = None,
         request_id: str | None = None,
     ) -> None:
@@ -530,11 +545,15 @@ class AuthService:
                 purpose=TokenPurpose.PASSWORD_RESET.value,
             )
             await self._email.send_password_reset_email(
-                email=email, username=user.username, token=token,
+                email=email,
+                username=user.username,
+                token=token,
             )
 
     async def reset_password(
-        self, token: str, new_password: str,
+        self,
+        token: str,
+        new_password: str,
         ip_address: str | None = None,
         request_id: str | None = None,
     ) -> None:
@@ -555,31 +574,39 @@ class AuthService:
             user.password_hash = self._hasher.hash(new_password)
             await self._uow.users.update(user)
 
-            revoked = (
-                await self._uow.refresh_sessions.revoke_all_for_user(
-                    user.uid
-                )
+            revoked = await self._uow.refresh_sessions.revoke_all_for_user(user.uid)
+
+            revoked_before = datetime.now(timezone.utc)
+            await self._uow.token_blacklist.blacklist_all_for_user(
+                user_uid=user.uid,
+                before=revoked_before,
             )
 
             await self._uow.audit.log(
                 action=AuditAction.PASSWORD_RESET_COMPLETED.value,
                 actor_uid=user.uid,
                 target_uid=user.uid,
-                details={"revoked_sessions": revoked},
+                details={
+                    "revoked_sessions": revoked,
+                    "access_tokens_revoked_before": revoked_before.isoformat(),
+                },
                 ip_address=ip_address,
                 request_id=request_id,
             )
             await self._uow.commit()
 
     async def _send_confirmation_email(
-        self, user: UserEntity,
+        self,
+        user: UserEntity,
     ) -> None:
         token = self._url_tokens.create_token(
             data={"email": user.email},
             purpose=TokenPurpose.EMAIL_CONFIRMATION.value,
         )
         await self._email.send_confirmation_email(
-            email=user.email, username=user.username, token=token,
+            email=user.email,
+            username=user.username,
+            token=token,
         )
 
     async def resend_confirmation_email(

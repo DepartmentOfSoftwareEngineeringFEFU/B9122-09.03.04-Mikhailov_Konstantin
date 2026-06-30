@@ -11,9 +11,7 @@ from src.auth_service.core.protocols import TOTPServiceProtocol
 
 class TOTPService(TOTPServiceProtocol):
     def __init__(self):
-        self._fernet = Fernet(
-            settings.TOTP_ENCRYPTION_KEY.get_secret_value().encode()
-        )
+        self._fernet = Fernet(settings.TOTP_ENCRYPTION_KEY.get_secret_value().encode())
 
     def generate_secret(self) -> str:
         return pyotp.random_base32()

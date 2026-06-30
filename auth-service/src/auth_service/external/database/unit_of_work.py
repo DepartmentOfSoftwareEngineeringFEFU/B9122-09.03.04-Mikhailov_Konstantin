@@ -3,6 +3,7 @@ from src.auth_service.core.protocols import (
     RefreshSessionRepositoryProtocol,
     UnitOfWorkProtocol,
     UserRepositoryProtocol,
+    TokenBlacklistProtocol,
 )
 from src.auth_service.external.audit.db_audit import DatabaseAuditLog
 from src.auth_service.external.database.engine import async_session_factory
@@ -10,7 +11,9 @@ from src.auth_service.external.database.refresh_session_repo import (
     RefreshSessionRepository,
 )
 from src.auth_service.external.database.repositories import UserRepository
-
+from src.auth_service.external.token_blacklist.db_blacklist import (
+    DatabaseTokenBlacklist,
+)
 
 class SQLAlchemyUnitOfWork(UnitOfWorkProtocol):
 
@@ -22,6 +25,9 @@ class SQLAlchemyUnitOfWork(UnitOfWorkProtocol):
         self.users: UserRepositoryProtocol = UserRepository(self._session)
         self.refresh_sessions: RefreshSessionRepositoryProtocol = (
             RefreshSessionRepository(self._session)
+        )
+        self.token_blacklist: TokenBlacklistProtocol = DatabaseTokenBlacklist(
+            self._session,
         )
         self.audit: AuditLogProtocol = DatabaseAuditLog(self._session)
         return self

@@ -82,9 +82,16 @@ class DatabaseAuditLog(AuditLogProtocol):
     @staticmethod
     def _sanitize_details(details: dict) -> dict:
         sensitive_keys = {
-            "password", "password_hash", "current_password",
-            "new_password", "token", "access_token", "refresh_token",
-            "totp_secret", "secret", "code",
+            "password",
+            "password_hash",
+            "current_password",
+            "new_password",
+            "token",
+            "access_token",
+            "refresh_token",
+            "totp_secret",
+            "secret",
+            "code",
         }
         return {
             k: "***REDACTED***" if k.lower() in sensitive_keys else v
@@ -96,9 +103,7 @@ class DatabaseAuditLog(AuditLogProtocol):
         return {
             "id": entry.id,
             "actor_uid": str(entry.actor_uid) if entry.actor_uid else None,
-            "target_uid": (
-                str(entry.target_uid) if entry.target_uid else None
-            ),
+            "target_uid": (str(entry.target_uid) if entry.target_uid else None),
             "action": entry.action,
             "details": entry.details,
             "ip_address": entry.ip_address,
@@ -108,9 +113,10 @@ class DatabaseAuditLog(AuditLogProtocol):
             "created_at": entry.created_at.isoformat(),
         }
 
-
     async def get_all(
-        self, offset: int = 0, limit: int = 50,
+        self,
+        offset: int = 0,
+        limit: int = 50,
     ) -> list[dict]:
         stmt = (
             select(AuditLogModel)

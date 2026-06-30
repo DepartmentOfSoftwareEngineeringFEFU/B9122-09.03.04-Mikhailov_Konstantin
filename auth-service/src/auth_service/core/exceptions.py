@@ -117,6 +117,4 @@ class TwoFactorNotEnabledError(TwoFactorError):
 class RateLimitExceededError(AppException):
     def __init__(self, retry_after: int):
         self.retry_after = retry_after
-        super().__init__(
-            f"Rate limit exceeded. Retry after {retry_after} seconds"
-        )
+        super().__init__(f"Rate limit exceeded. Retry after {retry_after} seconds")

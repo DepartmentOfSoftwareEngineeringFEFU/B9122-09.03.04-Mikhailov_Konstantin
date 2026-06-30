@@ -36,7 +36,8 @@ return {1, remaining}
 class RedisRateLimiter(RateLimiterProtocol):
     def __init__(self, redis_url: str, prefix: str = "rl:"):
         self._redis = redis.from_url(
-            redis_url, decode_responses=True,
+            redis_url,
+            decode_responses=True,
         )
         self._prefix = prefix
         self._script = None
@@ -49,7 +50,10 @@ class RedisRateLimiter(RateLimiterProtocol):
         return self._script
 
     async def check_rate_limit(
-        self, key: str, max_attempts: int, window_seconds: int,
+        self,
+        key: str,
+        max_attempts: int,
+        window_seconds: int,
     ) -> None:
         full_key = f"{self._prefix}{key}"
         now = time.time()
@@ -69,7 +73,10 @@ class RedisRateLimiter(RateLimiterProtocol):
         await self._redis.delete(f"{self._prefix}{key}")
 
     async def get_remaining(
-        self, key: str, max_attempts: int, window_seconds: int,
+        self,
+        key: str,
+        max_attempts: int,
+        window_seconds: int,
     ) -> tuple[int, int]:
         full_key = f"{self._prefix}{key}"
         now = time.time()
@@ -86,9 +93,7 @@ class RedisRateLimiter(RateLimiterProtocol):
         oldest_entries = results[2]
 
         if oldest_entries:
-            reset_in = int(
-                oldest_entries[0][1] + window_seconds - now
-            ) + 1
+            reset_in = int(oldest_entries[0][1] + window_seconds - now) + 1
         else:
             reset_in = 0
 

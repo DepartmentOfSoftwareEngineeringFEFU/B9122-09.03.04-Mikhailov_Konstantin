@@ -1,5 +1,6 @@
 import logging
 from uuid import UUID
+from datetime import datetime, timezone
 
 from src.auth_service.core.exceptions import (
     InvalidCredentialsError,
@@ -16,6 +17,8 @@ from src.auth_service.core.protocols import (
     UnitOfWorkProtocol,
 )
 from src.auth_service.domain.entities import UserEntity
+from src.auth_service.core.constants import AuditAction
+
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +61,25 @@ class ProfileService:
             user.password_hash = self._hasher.hash(new_password)
             await self._uow.users.update(user)
 
-            await self._uow.refresh_sessions.revoke_all_for_user(user_uid)
+            revoked_sessions = await self._uow.refresh_sessions.revoke_all_for_user(
+                user_uid,
+            )
+
+            revoked_before = datetime.now(timezone.utc)
+            await self._uow.token_blacklist.blacklist_all_for_user(
+                user_uid=user_uid,
+                before=revoked_before,
+            )
+
+            await self._uow.audit.log(
+                action=AuditAction.PASSWORD_CHANGED.value,
+                actor_uid=user_uid,
+                target_uid=user_uid,
+                details={
+                    "revoked_sessions": revoked_sessions,
+                    "access_tokens_revoked_before": revoked_before.isoformat(),
+                },
+            )
 
             await self._uow.commit()
 
@@ -70,7 +91,9 @@ class ProfileService:
             )
 
     async def change_username(
-        self, user_uid: UUID, new_username: str,
+        self,
+        user_uid: UUID,
+        new_username: str,
     ) -> UserEntity:
         async with self._uow:
             user = await self._uow.users.get_by_id(user_uid)
@@ -96,7 +119,9 @@ class ProfileService:
             return updated
 
     async def change_phone(
-        self, user_uid: UUID, new_phone: str | None,
+        self,
+        user_uid: UUID,
+        new_phone: str | None,
     ) -> UserEntity:
         async with self._uow:
             user = await self._uow.users.get_by_id(user_uid)
@@ -151,7 +176,6 @@ class ProfileService:
                 "uri": uri,
             }
 
-
     async def confirm_2fa(self, user_uid: UUID, code: str) -> None:
         async with self._uow:
             user = await self._uow.users.get_by_id(user_uid)
@@ -180,7 +204,10 @@ class ProfileService:
             )
 
     async def disable_2fa(
-        self, user_uid: UUID, code: str, password: str,
+        self,
+        user_uid: UUID,
+        code: str,
+        password: str,
     ) -> None:
         async with self._uow:
             user = await self._uow.users.get_by_id(user_uid)

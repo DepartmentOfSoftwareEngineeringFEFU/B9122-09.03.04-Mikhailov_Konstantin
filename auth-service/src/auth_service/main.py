@@ -57,10 +57,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=(
-            ["*"] if not settings.is_production
-            else [settings.BASE_URL]
-        ),
+        allow_origins=(["*"] if not settings.is_production else [settings.BASE_URL]),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -86,6 +83,7 @@ def create_app() -> FastAPI:
     @app.get("/ready", tags=["Health"])
     async def readiness():
         from fastapi.responses import JSONResponse
+
         try:
             async with engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
