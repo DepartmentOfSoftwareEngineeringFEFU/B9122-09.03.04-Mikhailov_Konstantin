@@ -8,6 +8,7 @@ from src.auth_service.domain.entities import RefreshSession
 
 class RefreshTokenService:
     TOKEN_BYTES = 32
+
     @staticmethod
     def generate_token() -> str:
         return secrets.token_urlsafe(RefreshTokenService.TOKEN_BYTES)

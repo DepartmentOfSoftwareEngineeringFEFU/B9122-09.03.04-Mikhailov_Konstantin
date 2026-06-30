@@ -18,11 +18,14 @@ class AdminService:
         self._uow = uow
 
     async def list_users(
-        self, offset: int = 0, limit: int = 50,
+        self,
+        offset: int = 0,
+        limit: int = 50,
     ) -> tuple[list[UserEntity], int]:
         async with self._uow:
             users = await self._uow.users.get_all(
-                offset=offset, limit=limit,
+                offset=offset,
+                limit=limit,
             )
             total = await self._uow.users.count()
             return users, total

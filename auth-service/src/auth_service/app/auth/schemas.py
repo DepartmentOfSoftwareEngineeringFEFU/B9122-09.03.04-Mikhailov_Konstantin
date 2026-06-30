@@ -17,15 +17,21 @@ class _EmailNormalizationMixin(BaseModel):
     def normalize_email(cls, v: str) -> str:
         return v.lower().strip()
 
+
 class RegisterRequest(_EmailNormalizationMixin):
     username: str = Field(
-        min_length=3, max_length=50, examples=["john_doe"],
+        min_length=3,
+        max_length=50,
+        examples=["john_doe"],
     )
     password: str = Field(
-        min_length=8, max_length=128, examples=["SecurePass1!"],
+        min_length=8,
+        max_length=128,
+        examples=["SecurePass1!"],
     )
     phone_number: str | None = Field(
-        default=None, examples=["+79001234567"],
+        default=None,
+        examples=["+79001234567"],
     )
 
     @field_validator("username")
@@ -123,17 +129,18 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class AuthTokenResponse(BaseModel):
     requires_2fa: bool
     auth_token: str
     expires_in: int
 
+
 class AuthTokenRequest(BaseModel):
     auth_token: str
     totp_code: str = Field(
-        default=None,
         min_length=6,
         max_length=6,
+        pattern=r"^\d{6}$",
         description="TOTP 2FA code",
     )
-

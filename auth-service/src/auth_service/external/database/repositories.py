@@ -27,7 +27,7 @@ class UserRepository(UserRepositoryProtocol):
             totp_secret=model.totp_secret,
             created_at=model.created_at,
             updated_at=model.updated_at,
-            is_email_verified=model.is_email_verified
+            is_email_verified=model.is_email_verified,
         )
 
     @staticmethod
@@ -42,7 +42,7 @@ class UserRepository(UserRepositoryProtocol):
             is_active=entity.is_active,
             two_factor_enabled=entity.two_factor_enabled,
             totp_secret=entity.totp_secret,
-            is_email_verified=entity.is_email_verified
+            is_email_verified=entity.is_email_verified,
         )
 
     async def get_by_id(self, uid: UUID) -> UserEntity | None:
@@ -52,17 +52,13 @@ class UserRepository(UserRepositoryProtocol):
         return self._to_entity(model) if model else None
 
     async def get_by_email(self, email: str) -> UserEntity | None:
-        stmt = select(UserModel).where(
-            UserModel.email == email.lower().strip()
-        )
+        stmt = select(UserModel).where(UserModel.email == email.lower().strip())
         result = await self._session.execute(stmt)
         model = result.scalars().first()
         return self._to_entity(model) if model else None
 
     async def get_by_username(self, username: str) -> UserEntity | None:
-        stmt = select(UserModel).where(
-            UserModel.username == username.strip()
-        )
+        stmt = select(UserModel).where(UserModel.username == username.strip())
         result = await self._session.execute(stmt)
         model = result.scalars().first()
         return self._to_entity(model) if model else None
@@ -73,9 +69,7 @@ class UserRepository(UserRepositoryProtocol):
         model = result.scalars().first()
         return self._to_entity(model) if model else None
 
-    async def get_all(
-        self, offset: int = 0, limit: int = 50
-    ) -> list[UserEntity]:
+    async def get_all(self, offset: int = 0, limit: int = 50) -> list[UserEntity]:
         stmt = (
             select(UserModel)
             .order_by(UserModel.created_at.desc())
@@ -126,22 +120,16 @@ class UserRepository(UserRepositoryProtocol):
         await self._session.flush()
 
     async def exists_by_email(self, email: str) -> bool:
-        stmt = select(
-            exists().where(UserModel.email == email.lower().strip())
-        )
+        stmt = select(exists().where(UserModel.email == email.lower().strip()))
         result = await self._session.execute(stmt)
         return result.scalar_one()
 
     async def exists_by_username(self, username: str) -> bool:
-        stmt = select(
-            exists().where(UserModel.username == username.strip())
-        )
+        stmt = select(exists().where(UserModel.username == username.strip()))
         result = await self._session.execute(stmt)
         return result.scalar_one()
 
     async def exists_by_phone(self, phone: str) -> bool:
-        stmt = select(
-            exists().where(UserModel.phone_number == phone)
-        )
+        stmt = select(exists().where(UserModel.phone_number == phone))
         result = await self._session.execute(stmt)
         return result.scalar_one()

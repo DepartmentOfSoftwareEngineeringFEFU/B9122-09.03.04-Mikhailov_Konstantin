@@ -34,7 +34,10 @@ class EmailService(EmailServiceProtocol):
         self._mailer = FastMail(_mail_config)
 
     async def send_confirmation_email(
-        self, email: str, username: str, token: str,
+        self,
+        email: str,
+        username: str,
+        token: str,
     ) -> None:
         confirmation_link = (
             f"{settings.BASE_URL}/api/v1/auth/email-confirm?token={token}"
@@ -44,9 +47,7 @@ class EmailService(EmailServiceProtocol):
             "confirm_email.html",
             username=username,
             confirmation_link=confirmation_link,
-            expires_in_minutes=(
-                settings.EMAIL_CONFIRM_TOKEN_EXPIRE_SECONDS // 60
-            ),
+            expires_in_minutes=(settings.EMAIL_CONFIRM_TOKEN_EXPIRE_SECONDS // 60),
         )
 
         await self._send(
@@ -62,20 +63,20 @@ class EmailService(EmailServiceProtocol):
         )
 
     async def send_password_reset_email(
-        self, email: str, username: str, token: str,
+        self,
+        email: str,
+        username: str,
+        token: str,
     ) -> None:
         reset_link = (
-            f"{settings.BASE_URL}/api/v1/auth/password-reset/"
-            f"confirm?token={token}"
+            f"{settings.BASE_URL}/api/v1/auth/password-reset/" f"confirm?token={token}"
         )
 
         html = self._render_template(
             "reset_password.html",
             username=username,
             reset_link=reset_link,
-            expires_in_minutes=(
-                settings.PASSWORD_RESET_TOKEN_EXPIRE_SECONDS // 60
-            ),
+            expires_in_minutes=(settings.PASSWORD_RESET_TOKEN_EXPIRE_SECONDS // 60),
         )
 
         await self._send(

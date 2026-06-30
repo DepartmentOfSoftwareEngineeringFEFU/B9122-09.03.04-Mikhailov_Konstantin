@@ -70,7 +70,9 @@ class ProfileService:
             )
 
     async def change_username(
-        self, user_uid: UUID, new_username: str,
+        self,
+        user_uid: UUID,
+        new_username: str,
     ) -> UserEntity:
         async with self._uow:
             user = await self._uow.users.get_by_id(user_uid)
@@ -96,7 +98,9 @@ class ProfileService:
             return updated
 
     async def change_phone(
-        self, user_uid: UUID, new_phone: str | None,
+        self,
+        user_uid: UUID,
+        new_phone: str | None,
     ) -> UserEntity:
         async with self._uow:
             user = await self._uow.users.get_by_id(user_uid)
@@ -151,7 +155,6 @@ class ProfileService:
                 "uri": uri,
             }
 
-
     async def confirm_2fa(self, user_uid: UUID, code: str) -> None:
         async with self._uow:
             user = await self._uow.users.get_by_id(user_uid)
@@ -180,7 +183,10 @@ class ProfileService:
             )
 
     async def disable_2fa(
-        self, user_uid: UUID, code: str, password: str,
+        self,
+        user_uid: UUID,
+        code: str,
+        password: str,
     ) -> None:
         async with self._uow:
             user = await self._uow.users.get_by_id(user_uid)

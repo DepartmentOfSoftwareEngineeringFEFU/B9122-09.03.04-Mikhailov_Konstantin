@@ -51,7 +51,7 @@ class Settings(BaseSettings):
 
     JWT_AUTH_SECRET_KEY: SecretStr
     JWT_AUTH_TOKEN_EXPIRE_MINUTES: int = Field(default=15, ge=1, le=60)
-    
+
     JWT_ISSUER: str = "auth-service"
     JWT_AUDIENCE: str = "auth-service-api"
 
@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     @classmethod
     def validate_fernet_key(cls, v: SecretStr) -> SecretStr:
         import base64
+
         key = v.get_secret_value()
         try:
             decoded = base64.urlsafe_b64decode(key)
@@ -100,6 +101,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_LOGIN_WINDOW_SECONDS: int = Field(default=300, ge=60)
     RATE_LIMIT_REGISTER_ATTEMPTS: int = Field(default=3, ge=1)
     RATE_LIMIT_REGISTER_WINDOW_SECONDS: int = Field(default=3600, ge=60)
+
+    AUTO_VERIFY_EMAIL_IN_DEV: bool = True
 
     @field_validator("JWT_ALGORITHM")
     @classmethod

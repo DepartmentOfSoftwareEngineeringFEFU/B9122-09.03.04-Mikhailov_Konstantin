@@ -13,7 +13,9 @@ class UserRepositoryProtocol(Protocol):
     async def get_by_username(self, username: str) -> UserEntity | None: ...
     async def get_by_phone(self, phone: str) -> UserEntity | None: ...
     async def get_all(
-        self, offset: int = 0, limit: int = 50,
+        self,
+        offset: int = 0,
+        limit: int = 50,
     ) -> list[UserEntity]: ...
     async def count(self) -> int: ...
     async def create(self, user: UserEntity) -> UserEntity: ...
@@ -27,11 +29,13 @@ class UserRepositoryProtocol(Protocol):
 @runtime_checkable
 class RefreshSessionRepositoryProtocol(Protocol):
     async def create(
-        self, session: RefreshSession,
+        self,
+        session: RefreshSession,
     ) -> RefreshSession: ...
 
     async def get_by_token_hash(
-        self, token_hash: str,
+        self,
+        token_hash: str,
     ) -> RefreshSession | None: ...
 
     async def revoke(self, token_hash: str) -> None: ...
@@ -39,18 +43,22 @@ class RefreshSessionRepositoryProtocol(Protocol):
     async def revoke_all_for_user(self, user_uid: UUID) -> int: ...
 
     async def get_active_sessions(
-        self, user_uid: UUID,
+        self,
+        user_uid: UUID,
     ) -> list[RefreshSession]: ...
 
     async def count_active_sessions(self, user_uid: UUID) -> int: ...
 
     async def mark_replaced(
-        self, old_token_hash: str, new_token_hash: str,
+        self,
+        old_token_hash: str,
+        new_token_hash: str,
     ) -> None: ...
 
     async def update_last_used(self, token_hash: str) -> None: ...
 
     async def cleanup_expired(self) -> int: ...
+
 
 @runtime_checkable
 class AuditLogProtocol(Protocol):
@@ -67,16 +75,25 @@ class AuditLogProtocol(Protocol):
     ) -> None: ...
 
     async def get_user_history(
-        self, user_uid: UUID, offset: int = 0, limit: int = 50,
+        self,
+        user_uid: UUID,
+        offset: int = 0,
+        limit: int = 50,
     ) -> list[dict]: ...
 
     async def get_by_action(
-        self, action: str, offset: int = 0, limit: int = 50,
+        self,
+        action: str,
+        offset: int = 0,
+        limit: int = 50,
     ) -> list[dict]: ...
 
     async def get_all(
-        self, offset: int = 0, limit: int = 50,
+        self,
+        offset: int = 0,
+        limit: int = 50,
     ) -> list[dict]: ...
+
 
 @runtime_checkable
 class UnitOfWorkProtocol(Protocol):
@@ -109,7 +126,10 @@ class TokenServiceProtocol(Protocol):
 class URLSafeTokenServiceProtocol(Protocol):
     def create_token(self, data: dict, purpose: str) -> str: ...
     def decode_token(
-        self, token: str, purpose: str, max_age: int,
+        self,
+        token: str,
+        purpose: str,
+        max_age: int,
     ) -> dict: ...
 
 
@@ -126,22 +146,34 @@ class TOTPServiceProtocol(Protocol):
 @runtime_checkable
 class EmailServiceProtocol(Protocol):
     async def send_confirmation_email(
-        self, email: str, username: str, token: str,
+        self,
+        email: str,
+        username: str,
+        token: str,
     ) -> None: ...
 
     async def send_password_reset_email(
-        self, email: str, username: str, token: str,
+        self,
+        email: str,
+        username: str,
+        token: str,
     ) -> None: ...
 
 
 @runtime_checkable
 class RateLimiterProtocol(Protocol):
     async def check_rate_limit(
-        self, key: str, max_attempts: int, window_seconds: int,
+        self,
+        key: str,
+        max_attempts: int,
+        window_seconds: int,
     ) -> None: ...
 
     async def reset(self, key: str) -> None: ...
 
     async def get_remaining(
-        self, key: str, max_attempts: int, window_seconds: int,
+        self,
+        key: str,
+        max_attempts: int,
+        window_seconds: int,
     ) -> tuple[int, int]: ...

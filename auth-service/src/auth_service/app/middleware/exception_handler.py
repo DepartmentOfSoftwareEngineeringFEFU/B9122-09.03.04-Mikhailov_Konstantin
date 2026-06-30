@@ -37,21 +37,16 @@ EXCEPTION_STATUS_MAP: dict[type[AppException], int] = {
     SamePasswordError: status.HTTP_400_BAD_REQUEST,
     TwoFactorAlreadyEnabledError: status.HTTP_400_BAD_REQUEST,
     TwoFactorNotEnabledError: status.HTTP_400_BAD_REQUEST,
-
     InvalidCredentialsError: 401,
     AccountNotActiveError: 401,
     TokenExpiredError: 401,
     InvalidTokenError: 401,
     TokenRevokedException: 401,
     TwoFactorRequiredError: 401,
-
     AuthorizationError: 403,
     InsufficientPermissionsError: 403,
-
     UserNotFoundError: 404,
-
     UserAlreadyExistsError: 409,
-
     RateLimitExceededError: 429,
 }
 
@@ -85,7 +80,8 @@ def _get_status_code(exc: AppException) -> int:
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppException)
     async def app_exception_handler(
-        request: Request, exc: AppException,
+        request: Request,
+        exc: AppException,
     ) -> JSONResponse:
         status_code = _get_status_code(exc)
         request_id = getattr(request.state, "request_id", str(uuid4()))
@@ -123,7 +119,8 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(IntegrityError)
     async def integrity_error_handler(
-        request: Request, exc: IntegrityError,
+        request: Request,
+        exc: IntegrityError,
     ) -> JSONResponse:
         logger.warning(
             {
@@ -135,8 +132,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         response = ApiErrorResponse(
             error=ErrorDetail(
                 code="ConflictError",
-                message="Resource already exists or conflicts "
-                        "with existing data",
+                message="Resource already exists or conflicts " "with existing data",
             )
         )
         return JSONResponse(
@@ -146,7 +142,8 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(
-        request: Request, exc: Exception,
+        request: Request,
+        exc: Exception,
     ) -> JSONResponse:
         request_id = getattr(request.state, "request_id", str(uuid4()))
         logger.critical(

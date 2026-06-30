@@ -40,31 +40,22 @@ class PasswordValidator:
 
         if len(password) > self._policy.max_length:
             violations.append(
-                f"Password must not exceed "
-                f"{self._policy.max_length} characters"
+                f"Password must not exceed " f"{self._policy.max_length} characters"
             )
 
         if self._policy.require_uppercase and not re.search(r"[A-Z]", password):
-            violations.append(
-                "Password must contain at least one uppercase letter"
-            )
+            violations.append("Password must contain at least one uppercase letter")
 
         if self._policy.require_lowercase and not re.search(r"[a-z]", password):
-            violations.append(
-                "Password must contain at least one lowercase letter"
-            )
+            violations.append("Password must contain at least one lowercase letter")
 
         if self._policy.require_digit and not re.search(r"\d", password):
-            violations.append(
-                "Password must contain at least one digit"
-            )
+            violations.append("Password must contain at least one digit")
 
         if self._policy.require_special and not re.search(
             r"[!@#$%^&*()_+\-=\[\]{}|;:',.<>?/~`]", password
         ):
-            violations.append(
-                "Password must contain at least one special character"
-            )
+            violations.append("Password must contain at least one special character")
 
         if violations:
             raise PasswordValidationError(violations)

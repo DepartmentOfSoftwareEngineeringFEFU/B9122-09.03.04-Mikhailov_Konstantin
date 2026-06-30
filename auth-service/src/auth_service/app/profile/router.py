@@ -46,9 +46,7 @@ async def change_password(
         current_password=data.current_password,
         new_password=data.new_password,
     )
-    return ApiResponse(
-        data=MessageResponse(message="Password changed successfully")
-    )
+    return ApiResponse(data=MessageResponse(message="Password changed successfully"))
 
 
 @router.patch(
@@ -90,7 +88,7 @@ async def change_phone(
     response_model=ApiResponse[Enable2FAResponse],
     summary="Setup 2FA — Step 1: Get QR code",
     description="Generates TOTP secret and QR code. "
-                "2FA is NOT enabled until confirmed with /2fa/confirm.",
+    "2FA is NOT enabled until confirmed with /2fa/confirm.",
 )
 async def setup_2fa(
     current_user: CurrentUser,
@@ -105,7 +103,7 @@ async def setup_2fa(
     response_model=ApiResponse[MessageResponse],
     summary="Confirm 2FA — Step 2: Verify code",
     description="Verifies TOTP code from authenticator app. "
-                "Enables 2FA if code is correct.",
+    "Enables 2FA if code is correct.",
 )
 async def confirm_2fa(
     data: Confirm2FARequest,
@@ -117,9 +115,7 @@ async def confirm_2fa(
         code=data.code,
     )
     return ApiResponse(
-        data=MessageResponse(
-            message="Two-factor authentication enabled successfully"
-        )
+        data=MessageResponse(message="Two-factor authentication enabled successfully")
     )
 
 
@@ -140,7 +136,5 @@ async def disable_2fa(
         password=data.password,
     )
     return ApiResponse(
-        data=MessageResponse(
-            message="Two-factor authentication disabled successfully"
-        )
+        data=MessageResponse(message="Two-factor authentication disabled successfully")
     )

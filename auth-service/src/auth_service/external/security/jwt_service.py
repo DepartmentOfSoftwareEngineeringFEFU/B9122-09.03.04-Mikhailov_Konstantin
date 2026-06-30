@@ -17,7 +17,8 @@ class JWTService(TokenServiceProtocol):
             "sub": str(user.uid),
             "role": user.role.value,
             "type": TokenType.ACCESS.value,
-            "exp": now + timedelta(
+            "exp": now
+            + timedelta(
                 minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
             ),
             "iat": now,
@@ -41,7 +42,13 @@ class JWTService(TokenServiceProtocol):
                 audience=settings.JWT_AUDIENCE,
                 options={
                     "require": [
-                        "sub", "exp", "iat", "iss", "aud", "jti", "type",
+                        "sub",
+                        "exp",
+                        "iat",
+                        "iss",
+                        "aud",
+                        "jti",
+                        "type",
                     ],
                 },
             )
@@ -60,26 +67,26 @@ class JWTService(TokenServiceProtocol):
             role=payload["role"],
             token_type=payload["type"],
             exp=datetime.fromtimestamp(
-                payload["exp"], tz=timezone.utc,
+                payload["exp"],
+                tz=timezone.utc,
             ),
             iat=datetime.fromtimestamp(
-                payload["iat"], tz=timezone.utc,
+                payload["iat"],
+                tz=timezone.utc,
             ),
             iss=payload["iss"],
             aud=payload["aud"],
             jti=uuid.UUID(payload["jti"]),
         )
-    
-    def create_auth_token(
-        self, 
-        user: UserEntity
-    ) -> str:
+
+    def create_auth_token(self, user: UserEntity) -> str:
         now = datetime.now(timezone.utc)
         payload = {
             "sub": str(user.uid),
             "role": user.role.value,
             "type": TokenType.AUTH.value,
-            "exp": now + timedelta(
+            "exp": now
+            + timedelta(
                 minutes=settings.JWT_AUTH_TOKEN_EXPIRE_MINUTES,
             ),
             "iat": now,
@@ -92,7 +99,7 @@ class JWTService(TokenServiceProtocol):
             settings.JWT_AUTH_SECRET_KEY.get_secret_value(),
             algorithm=settings.JWT_ALGORITHM,
         )
-    
+
     def decode_auth_token(self, token: str) -> TokenPayload:
         try:
             payload = jwt.decode(
@@ -103,7 +110,13 @@ class JWTService(TokenServiceProtocol):
                 audience=settings.JWT_AUDIENCE,
                 options={
                     "require": [
-                        "sub", "exp", "iat", "iss", "aud", "jti", "type",
+                        "sub",
+                        "exp",
+                        "iat",
+                        "iss",
+                        "aud",
+                        "jti",
+                        "type",
                     ],
                 },
             )
@@ -122,10 +135,12 @@ class JWTService(TokenServiceProtocol):
             role=payload["role"],
             token_type=payload["type"],
             exp=datetime.fromtimestamp(
-                payload["exp"], tz=timezone.utc,
+                payload["exp"],
+                tz=timezone.utc,
             ),
             iat=datetime.fromtimestamp(
-                payload["iat"], tz=timezone.utc,
+                payload["iat"],
+                tz=timezone.utc,
             ),
             iss=payload["iss"],
             aud=payload["aud"],

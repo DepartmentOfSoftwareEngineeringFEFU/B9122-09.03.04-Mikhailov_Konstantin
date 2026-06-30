@@ -10,7 +10,8 @@ class UserRole(str, Enum):
     @classmethod
     def has_value(cls, value: str) -> bool:
         return value in cls._value2member_map_
-    
+
+
 class TokenType(str, Enum):
     ACCESS = "access"
     REFRESH = "refresh"

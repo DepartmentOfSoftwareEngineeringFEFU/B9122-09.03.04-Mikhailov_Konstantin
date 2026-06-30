@@ -33,15 +33,15 @@ class InMemoryRateLimiter(RateLimiterProtocol):
                 pass
 
     async def check_rate_limit(
-        self, key: str, max_attempts: int, window_seconds: int,
+        self,
+        key: str,
+        max_attempts: int,
+        window_seconds: int,
     ) -> None:
         now = time.monotonic()
 
         async with self._lock:
-            if (
-                key not in self._buckets
-                and len(self._buckets) >= self.MAX_KEYS
-            ):
+            if key not in self._buckets and len(self._buckets) >= self.MAX_KEYS:
                 await self._cleanup_stale_entries_locked(now)
 
                 if len(self._buckets) >= self.MAX_KEYS:
@@ -49,15 +49,11 @@ class InMemoryRateLimiter(RateLimiterProtocol):
 
             bucket = self._buckets[key]
             cutoff = now - window_seconds
-            bucket.timestamps = [
-                ts for ts in bucket.timestamps if ts > cutoff
-            ]
+            bucket.timestamps = [ts for ts in bucket.timestamps if ts > cutoff]
 
             if len(bucket.timestamps) >= max_attempts:
                 oldest = min(bucket.timestamps)
-                retry_after = (
-                    int(oldest + window_seconds - now) + 1
-                )
+                retry_after = int(oldest + window_seconds - now) + 1
                 raise RateLimitExceededError(
                     retry_after=retry_after,
                 )
@@ -69,7 +65,10 @@ class InMemoryRateLimiter(RateLimiterProtocol):
             self._buckets.pop(key, None)
 
     async def get_remaining(
-        self, key: str, max_attempts: int, window_seconds: int,
+        self,
+        key: str,
+        max_attempts: int,
+        window_seconds: int,
     ) -> tuple[int, int]:
         now = time.monotonic()
 
@@ -103,8 +102,7 @@ class InMemoryRateLimiter(RateLimiterProtocol):
             stale_keys = []
             for key, bucket in self._buckets.items():
                 bucket.timestamps = [
-                    ts for ts in bucket.timestamps
-                    if ts > now - max_window
+                    ts for ts in bucket.timestamps if ts > now - max_window
                 ]
                 if not bucket.timestamps:
                     stale_keys.append(key)
@@ -113,14 +111,14 @@ class InMemoryRateLimiter(RateLimiterProtocol):
                 del self._buckets[key]
 
     async def _cleanup_stale_entries_locked(
-        self, now: float,
+        self,
+        now: float,
     ) -> None:
         max_window = 3600
         stale_keys = []
         for key, bucket in self._buckets.items():
             bucket.timestamps = [
-                ts for ts in bucket.timestamps
-                if ts > now - max_window
+                ts for ts in bucket.timestamps if ts > now - max_window
             ]
             if not bucket.timestamps:
                 stale_keys.append(key)

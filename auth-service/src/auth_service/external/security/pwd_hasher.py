@@ -12,11 +12,11 @@ from src.auth_service.core.protocols import PasswordHasherProtocol
 class Argon2PasswordHasher(PasswordHasherProtocol):
     def __init__(self):
         self._hasher = Argon2Hasher(
-            time_cost=3,          # количество итераций
-            memory_cost=65536,    # 64 MB
-            parallelism=4,        # 4 потока
-            hash_len=32,          # длина хеша
-            salt_len=16,          # длина соли
+            time_cost=3,  # количество итераций
+            memory_cost=65536,  # 64 MB
+            parallelism=4,  # 4 потока
+            hash_len=32,  # длина хеша
+            salt_len=16,  # длина соли
         )
 
     def hash(self, password: str) -> str:

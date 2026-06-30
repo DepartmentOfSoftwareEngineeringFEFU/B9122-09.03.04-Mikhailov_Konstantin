@@ -35,6 +35,7 @@ _bearer_scheme = HTTPBearer(auto_error=True)
 
 _rate_limiter = InMemoryRateLimiter()
 
+
 @lru_cache(maxsize=1)
 def get_password_hasher() -> PasswordHasherProtocol:
     return Argon2PasswordHasher()
@@ -70,21 +71,13 @@ def get_uow() -> UnitOfWorkProtocol:
 
 def get_auth_service(
     uow: Annotated[UnitOfWorkProtocol, Depends(get_uow)],
-    hasher: Annotated[
-        PasswordHasherProtocol, Depends(get_password_hasher)
-    ],
-    token_service: Annotated[
-        TokenServiceProtocol, Depends(get_token_service)
-    ],
+    hasher: Annotated[PasswordHasherProtocol, Depends(get_password_hasher)],
+    token_service: Annotated[TokenServiceProtocol, Depends(get_token_service)],
     url_token_service: Annotated[
         URLSafeTokenServiceProtocol, Depends(get_url_token_service)
     ],
-    totp_service: Annotated[
-        TOTPServiceProtocol, Depends(get_totp_service)
-    ],
-    email_service: Annotated[
-        EmailServiceProtocol, Depends(get_email_service)
-    ],
+    totp_service: Annotated[TOTPServiceProtocol, Depends(get_totp_service)],
+    email_service: Annotated[EmailServiceProtocol, Depends(get_email_service)],
 ) -> AuthService:
     return AuthService(
         uow=uow,
@@ -98,12 +91,8 @@ def get_auth_service(
 
 def get_profile_service(
     uow: Annotated[UnitOfWorkProtocol, Depends(get_uow)],
-    hasher: Annotated[
-        PasswordHasherProtocol, Depends(get_password_hasher)
-    ],
-    totp_service: Annotated[
-        TOTPServiceProtocol, Depends(get_totp_service)
-    ],
+    hasher: Annotated[PasswordHasherProtocol, Depends(get_password_hasher)],
+    totp_service: Annotated[TOTPServiceProtocol, Depends(get_totp_service)],
 ) -> ProfileService:
     return ProfileService(
         uow=uow,
@@ -119,21 +108,15 @@ def get_admin_service(
 
 
 async def get_current_user(
-    credentials: Annotated[
-        HTTPAuthorizationCredentials, Depends(_bearer_scheme)
-    ],
-    token_service: Annotated[
-        TokenServiceProtocol, Depends(get_token_service)
-    ],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer_scheme)],
+    token_service: Annotated[TokenServiceProtocol, Depends(get_token_service)],
 ) -> TokenPayload:
     return token_service.decode_access_token(credentials.credentials)
 
 
 def require_role(*roles: UserRole):
     async def _check_role(
-        current_user: Annotated[
-            TokenPayload, Depends(get_current_user)
-        ],
+        current_user: Annotated[TokenPayload, Depends(get_current_user)],
     ) -> TokenPayload:
         try:
             user_role = UserRole(current_user.role)

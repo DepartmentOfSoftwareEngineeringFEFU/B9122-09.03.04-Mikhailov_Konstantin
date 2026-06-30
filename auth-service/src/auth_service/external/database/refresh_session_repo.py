@@ -28,7 +28,7 @@ class RefreshSessionRepository(RefreshSessionRepositoryProtocol):
             last_used_at=model.last_used_at,
             replaced_by=model.replaced_by,
         )
-    
+
     async def create(self, session: RefreshSession) -> RefreshSession:
         model = RefreshSessionModel(
             token_hash=session.token_hash,
@@ -67,7 +67,9 @@ class RefreshSessionRepository(RefreshSessionRepositoryProtocol):
         return result.rowcount
 
     async def mark_replaced(
-        self, old_token_hash: str, new_token_hash: str,
+        self,
+        old_token_hash: str,
+        new_token_hash: str,
     ) -> None:
         stmt = (
             update(RefreshSessionModel)
@@ -90,7 +92,8 @@ class RefreshSessionRepository(RefreshSessionRepositoryProtocol):
         await self._session.flush()
 
     async def get_by_token_hash(
-        self, token_hash: str,
+        self,
+        token_hash: str,
     ) -> RefreshSession | None:
         stmt = select(RefreshSessionModel).where(
             RefreshSessionModel.token_hash == token_hash,
@@ -100,7 +103,8 @@ class RefreshSessionRepository(RefreshSessionRepositoryProtocol):
         return self._to_entity(model) if model else None
 
     async def get_active_sessions(
-        self, user_uid: UUID,
+        self,
+        user_uid: UUID,
     ) -> list[RefreshSession]:
         now = datetime.now(timezone.utc)
         stmt = (
