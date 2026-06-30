@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     JWT_AUTH_TOKEN_EXPIRE_MINUTES: int = Field(default=15, ge=1, le=60)
 
     JWT_ISSUER: str = "auth-service"
-    JWT_AUDIENCE: str = "auth-service-api"
+    JWT_AUDIENCE: str = "real-estate-api"
 
     INTERNAL_SERVICE_TOKEN: str
     REDIS_URL: str = "redis://localhost:6379/0"

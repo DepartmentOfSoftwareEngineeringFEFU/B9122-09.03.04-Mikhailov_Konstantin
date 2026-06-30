@@ -72,7 +72,7 @@ class Settings(BaseSettings):
 
     JWT_ISSUER: str = "auth-service"
 
-    JWT_AUDIENCE: str = "real-estate-app"
+    JWT_AUDIENCE: str = "real-estate-api"
 
     INTERNAL_SERVICE_TOKEN: str
 
